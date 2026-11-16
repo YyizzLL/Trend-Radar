@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -47,6 +48,7 @@ from src.constants import (  # noqa: E402
     EXIT_EDGE,
     EXIT_LOGIN,
     EXIT_NEEDS_HUMAN,
+    EXIT_STALLED,
     EXIT_VERIFY,
 )
 from src.deliver import digest as digest_mod  # noqa: E402
@@ -57,7 +59,7 @@ from src.deps import missing_modules  # noqa: E402
 
 LOCK_PATH = ROOT / "data" / "state" / "daily_lock.json"
 DAILY_DIR = ROOT / "data" / "daily"
-LOG_DIR = ROOT / "sandbox" / "logs"
+LOG_DIR = ROOT / "sandbox" / "logs"   # 步骤日志也放这里：prune 只扫 logs/*.log，不递归
 RUNS_DIR = ROOT / "sandbox" / "runs"
 # 默认值；`automation.stale_running_min` / `automation.max_attempts` 可覆盖
 STALE_RUNNING_MIN = 90      # running 超过这么久视为僵尸锁
@@ -178,11 +180,64 @@ def log(msg: str) -> None:
 def child_env() -> dict[str, str]:
     env_vars = dict(os.environ)
     env_vars["PYTHONIOENCODING"] = "utf-8"
+    # 必须无缓冲：父进程靠「日志文件有没有变大」判断子进程是卡死还是在跑。
+    # 不加这行，输出会攒在 8KB 缓冲里，正常任务会被当成卡死杀掉（2026-11-16）。
+    env_vars["PYTHONUNBUFFERED"] = "1"
     # 本机 CDP 不能走代理，否则 playwright 连不上 127.0.0.1:9222
     no_proxy = "127.0.0.1,localhost"
     env_vars["NO_PROXY"] = ",".join(filter(None, [env_vars.get("NO_PROXY", ""), no_proxy]))
     env_vars["no_proxy"] = env_vars["NO_PROXY"]
     return env_vars
+
+
+def _step_log_path(name: str) -> Path:
+    """步骤日志路径：`sandbox/logs/step-<日期>-<步骤名>.log`。
+
+    放在 logs 根目录（不是子目录）是因为 `prune` 只清理 `logs/*.log`，不递归——
+    放子目录会永远不被清理，日志会一直涨。
+    同名步骤（含「续采 2」这类后缀）分开存；同一天重跑会覆盖。
+    """
+    safe = re.sub(r"[^\w\u4e00-\u9fa5-]+", "_", name)[:48].strip("_") or "step"
+    return LOG_DIR / f"step-{today_str()}-{safe}.log"
+
+
+def _tail(path: Path, count: int = 8) -> str:
+    """取日志尾部若干行。跳过文件头（`# ...`）——那是命令回显，不是错误信息。"""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return ""
+    lines = [ln for ln in text.strip().splitlines() if not ln.startswith("# ")]
+    return " / ".join(lines[-count:])
+
+
+def _human_seconds(seconds: float) -> str:
+    """报错文案用：短于 2 分钟说秒，否则说分钟。"""
+    return f"{seconds / 60:.0f} 分钟" if seconds >= 120 else f"{seconds:.0f} 秒"
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    """杀掉子进程**及其子进程树**。
+
+    Windows 上 `proc.kill()` 只杀直接子进程，Playwright 的 node driver
+    会留下来变成孤儿，下一次 connect_over_cdp 可能连到半死的浏览器。
+    所以优先用 `taskkill /T`（Edge 不是它的子进程，不会被误杀）。
+    """
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+            timeout=15,
+        )
+    except Exception:  # noqa: BLE001
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        proc.wait(timeout=10)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class StepFailed(RuntimeError):
@@ -201,24 +256,69 @@ class StepFailed(RuntimeError):
         super().__init__(f"{msg}：{tail}" if tail else msg)
 
 
-def run_step(name: str, args: list[str], timeout: int) -> None:
+def run_step(
+    name: str,
+    args: list[str],
+    timeout: int,
+    *,
+    silent_timeout: float | None = None,
+) -> None:
+    """跑一个子步骤，输出全量落盘。
+
+    `timeout` 是**整步**预算（墙钟）；`silent_timeout` 是**连续无输出**的上限。
+    两者缺一不可：
+    - 只有墙钟：卡死的进程会一直等到预算烧完（2026-11-15 等了 100 分钟）
+    - 只有静默：一个持续刷日志的死循环永远不会被杀
+
+    静默判定必须配合 `PYTHONUNBUFFERED=1`（见 child_env），否则输出卡在缓冲区，
+    文件不增长，正常任务会被误杀。
+    """
     log(f"▶ {name}：{' '.join(args[-2:])}")
     started = time.time()
-    proc = subprocess.run(
-        [sys.executable, *args],
-        cwd=str(ROOT),
-        env=child_env(),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-    )
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = _step_log_path(name)
+    log_path.write_text(f"# {now_iso()} {name} {' '.join(args)}\n", encoding="utf-8")
+
+    rc = 0
+    with log_path.open("ab") as out:
+        proc = subprocess.Popen(
+            [sys.executable, *args],
+            cwd=str(ROOT),
+            env=child_env(),
+            stdout=out,
+            stderr=subprocess.STDOUT,
+        )
+        last_size = 0
+        last_growth = time.time()
+        while proc.poll() is None:
+            time.sleep(1)
+            try:
+                size = log_path.stat().st_size
+            except OSError:
+                size = last_size
+            if size > last_size:
+                last_size = size
+                last_growth = time.time()
+                continue
+            if silent_timeout and time.time() - last_growth > silent_timeout:
+                _terminate(proc)
+                raise StepFailed(
+                    name, EXIT_STALLED,
+                    f"连续 {_human_seconds(silent_timeout)}无输出，已终止；"
+                    f"日志 {log_path.name}",
+                )
+            if time.time() - started > timeout:
+                _terminate(proc)
+                raise StepFailed(
+                    name, EXIT_STALLED,
+                    f"超过整步预算 {_human_seconds(timeout)}，已终止；日志 {log_path.name}",
+                )
+        rc = proc.returncode
+
     cost = time.time() - started
-    if proc.returncode != 0:
-        tail = " / ".join((proc.stderr or proc.stdout or "").strip().splitlines()[-6:])
-        raise StepFailed(name, proc.returncode, tail)
-    log(f"✔ {name}（{cost:.0f}s）")
+    if rc != 0:
+        raise StepFailed(name, rc, _tail(log_path))
+    log(f"✔ {name}（{cost:.0f}s，日志 {log_path.name}）")
 
 
 def port_ready(port: int = 9222) -> bool:
@@ -462,14 +562,23 @@ def main() -> int:
                 budget = int(auto_cfg.get("collect_timeout_min", 90)) * 60
                 max_tries = max(1, int(auto_cfg.get("collect_retries", 3)))
                 wait_s = max(0, int(auto_cfg.get("collect_retry_wait_s", 60)))
+                # 人机验证：先自动换会话（重启 Edge）试几次，仍不行才转人工。
+                # 依据 2026-11-16：换会话后一跑就通，不用人工点验证；11-15 死等 100 分钟
+                # 则是因为 5 小时里一直复用同一个被标记的会话。
+                verify_retries = max(0, int(auto_cfg.get("verify_retries", 2)))
+                verify_wait_s = max(0, int(auto_cfg.get("verify_retry_wait_s", 90)))
+                # 静默超时只给采集开：单查询最坏 ≈2 分钟（空结果重试）/ ≈6 分钟（连续 502），
+                # 再加一次 240 秒冷却，合法最长沉默约 10 分钟 —— 15 分钟留 50% 余量。
+                silent_min = float(auto_cfg.get("silent_timeout_min", 15))
                 deadline = time.time() + budget
                 tries = 0
+                verify_tries = 0
                 while True:
                     tries += 1
                     label = "采集抖音" if tries == 1 else f"采集抖音（续采 {tries}）"
                     remain = int(max(60, deadline - time.time()))
                     try:
-                        run_step(label, collect_args, remain)
+                        run_step(label, collect_args, remain, silent_timeout=silent_min * 60)
                         # 覆盖度不足不算「采完了」：间歇性软拦截会让进程正常退出，
                         # 但只覆盖 3~4 个查询。这里再续采，直到达标或预算用完。
                         ok_n, planned = douyin_coverage()
@@ -485,15 +594,42 @@ def main() -> int:
                         log(f"覆盖度 {ok_n}/{planned}")
                         break
                     except Exception as exc:  # noqa: BLE001
-                        # 退出码语义统一在 src/constants：3 验证码 / 4 页签 / 5 连不上 Edge / 6 登录失效。
-                        # 3 和 6 必须人工介入，重试只会再等一轮；4 和 5 可以换进程续采。
+                        # 退出码语义统一在 src/constants：
+                        # 3 验证码 / 4 页签 / 5 连不上 Edge / 6 登录失效 / 7 静默超时。
                         code = getattr(exc, "returncode", None)
+
                         if code in EXIT_NEEDS_HUMAN:
-                            if code == EXIT_VERIFY:
-                                log("检测到抖音人机验证，停止重试——请在 Edge 窗口完成验证后重跑")
-                            else:
-                                log("抖音登录态失效，停止重试——请在 Edge 窗口重新扫码登录")
+                            log("抖音登录态失效，停止重试——请在 Edge 窗口重新扫码登录")
                             raise
+
+                        if code == EXIT_VERIFY:
+                            # 验证码绑在浏览器会话上，换 Python 进程没用，必须重启 Edge。
+                            # 登录态在 .edge-cdp 里，重启后不用重新扫码。
+                            owned = edge_proc is not None and edge_proc.poll() is None
+                            if not owned:
+                                # Edge 是用户自己开的（ensure_edge 当时看到端口就绪就复用了），
+                                # 这里不能去杀——那是别人的窗口。直接转人工，别浪费两次等待。
+                                log("检测到抖音人机验证，但当前 Edge 不是本次启动的，"
+                                    "无法自动换会话——请在 Edge 窗口完成验证后重跑")
+                                raise
+                            if (verify_tries < verify_retries and tries < max_tries
+                                    and time.time() < deadline):
+                                verify_tries += 1
+                                log(f"检测到人机验证，重启 Edge 换会话后重试"
+                                    f"（第 {verify_tries}/{verify_retries} 次）")
+                                edge_proc.terminate()
+                                edge_proc = None
+                                time.sleep(3)
+                                time.sleep(verify_wait_s)
+                                edge_proc = ensure_edge(
+                                    bool(auto_cfg.get("edge_headless", False))
+                                ) or edge_proc
+                                collect_args = ["scripts/collect_douyin.py", "--resume"]
+                                continue
+                            log("检测到抖音人机验证，重启会话后仍被拦截——"
+                                "请在 Edge 窗口手动完成验证后重跑")
+                            raise
+
                         if tries >= max_tries or time.time() >= deadline:
                             raise
                         log(f"采集中断（第 {tries}/{max_tries} 次）：{str(exc)[:120]}")

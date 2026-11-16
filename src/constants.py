@@ -29,11 +29,13 @@ TYPE_QUERY: dict[str, list[str]] = {
 # 而 daily_run 靠字符串 "exit=3" 猜语义，于是「重启 Edge 续采」那条恢复路径
 # 永远走不到。别再把新的失败类型塞进同一个码。
 EXIT_OK = 0
-EXIT_VERIFY = 3    # 人机验证：需要人在 Edge 窗口里点，重试无效
+EXIT_VERIFY = 3    # 人机验证：换会话（重启 Edge）可能过，换进程没用
 EXIT_PAGE = 4      # 页签 / CDP 会话恢复失败：换进程 --resume 可续
 EXIT_EDGE = 5      # 连不上 127.0.0.1:9222：重启 Edge 可救
 EXIT_LOGIN = 6     # 登录态失效：需要重新扫码
+EXIT_STALLED = 7   # 静默超时（N 分钟没有任何输出）：已杀进程，可 --resume
 
 # 需要人工介入的退出码：重试只会再等一轮，直接停。
-EXIT_NEEDS_HUMAN = frozenset({EXIT_VERIFY, EXIT_LOGIN})
+# EXIT_VERIFY 不在里面——它先由 daily_run 自动重启会话试几次，仍不行才转人工。
+EXIT_NEEDS_HUMAN = frozenset({EXIT_LOGIN})
 

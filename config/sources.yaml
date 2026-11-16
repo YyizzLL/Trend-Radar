@@ -157,6 +157,11 @@ automation:
   retry_time: "11:30"        # 失败重试触发时间（同上）
   stale_running_min: 90      # 锁停在 running 超过这么久视为僵尸锁，可抢占重跑
   max_attempts: 2            # 同一天最多尝试几次（含 11:30 那次），超过就等第二天
+  verify_retries: 2          # 人机验证时自动重启 Edge 换会话的次数（0 = 立刻转人工）
+  verify_retry_wait_s: 90    # 每次换会话前等多久：给风控留恢复时间，太快换也没用
+  # 采集子进程连续多久没有任何输出就判定卡死（杀掉 + --resume）。
+  # 合法最长沉默约 10 分钟（一次 502 重试 6 分钟 + 空结果冷却 4 分钟），别设小于 12。
+  silent_timeout_min: 15
   ensure_edge: true          # 跑之前检查 9222，未就绪则启动
   # ⚠️ 实测：headless 会被抖音拦到「验证码中间页」（卡片数 0），必须用窗口模式
   edge_headless: false

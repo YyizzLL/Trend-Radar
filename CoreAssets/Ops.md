@@ -118,7 +118,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `sources.qq_music` | 榜单 id 列表、`max_rank`、`qps_ms`（换榜间隔，代码真的会读） |
 | `sources.bgm_sampler` | 采样开关、预算、每素材条数、缓存 TTL、推断比例 |
 | `judge` | `max_hotspots` / `max_cross` / `per_anchor_cap`（按**主体**计） / `recent_days` / `phrase_min_videos` / `ambiguous_anchors` / `repeat_window_days` / `max_repeat_cards` / `repeat_growth_min` |
-| `automation` | `daily_time` / `boot_delay_seconds` / `retry_time`（`install_task.py` 生成触发器时读）／`edge_headless`／各步骤超时；`collect_timeout_min` 是**整个采集阶段的预算**，另有 `collect_retries` / `collect_retry_wait_s`；`stale_running_min`（僵尸锁阈值）/ `max_attempts`（单日最多尝试次数） |
+| `automation` | `daily_time` / `boot_delay_seconds` / `retry_time`（`install_task.py` 生成触发器时读）／`edge_headless`／各步骤超时；`collect_timeout_min` 是**整个采集阶段的预算**，另有 `collect_retries` / `collect_retry_wait_s`；`stale_running_min`（僵尸锁阈值）/ `max_attempts`（单日最多尝试次数）/ `verify_retries` + `verify_retry_wait_s`（验证码自动换会话）/ `silent_timeout_min`（静默超时） |
 | `delivery.email` | `enabled`（false 等同 `--no-email`）、SMTP 服务器、附件开关、邮件内各区块条数上限 |
 | `cleanup` | 分层清理：`heavy_days` / `log_days` / `diag_days` / `diag_max` / `max_days` |
 
@@ -322,12 +322,19 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 | 码 | 常量 | 含义 | `daily_run` 的处理 |
 |---|---|---|---|
 | 0 | `EXIT_OK` | 跑完（**不代表采全**，覆盖度另算） | 检查覆盖率，不足则续采 |
-| 3 | `EXIT_VERIFY` | 人机验证 | **不重试**，告警「请人工过验证」 |
+| 3 | `EXIT_VERIFY` | 人机验证 | **自动重启 Edge 换会话**（默认 2 次 × 等 90 秒）→ 仍被拦才告警转人工 |
 | 4 | `EXIT_PAGE` | 页签 / CDP 会话救不回来 | 换进程 `--resume` 续采 |
 | 5 | `EXIT_EDGE` | 连不上 `127.0.0.1:9222` | 重启 Edge 后 `--resume` |
 | 6 | `EXIT_LOGIN` | 登录态失效 | **不重试**，告警「请重新扫码」 |
+| 7 | `EXIT_STALLED` | 静默超时（N 分钟没有任何输出） | 杀掉进程树 → `--resume` 续采 |
 
-3 和 6 属于「重试只会再等一轮」，所以立刻停；4 和 5 可以靠换进程恢复。
+**3 为什么不直接转人工**：验证码绑在**浏览器会话**上，换 Python 进程没用，但**重启 Edge 就换了一个会话**——
+登录态在 `.edge-cdp` 里，重启后不用重新扫码。2026-11-16 重启 Edge 后一跑就通，是这条的依据；
+11-15 之所以死等 100 分钟，是因为 5 小时里一直复用同一个被标记的会话。
+
+只有一个例外：如果当前 Edge 不是本次跑批启动的（用户自己开着的），脚本**不去杀**，直接转人工并说明原因。
+
+6 是唯一「重试必然无效」的：登录态没了，换会话也没用，必须扫码。
 
 验证页长这样：页面中央弹「点击两个形状相同的物体」，搜索页停在骨架屏、一张卡片都没有。
 2026-11-15 就是因为不认识它，死等 90 分钟预算耗尽；11-16 加了正文文案检测，
@@ -346,8 +353,22 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 | `report.md` / `materials.json` / `meta.json` / `daily.json` / `run.json` | ~70 KB | 日报、素材卡、正式 JSON、运行标记 | 永久 |
 | `report_data.json` / `bgm_plan.json` / `phrases_todo.json` / `run.log` / `judged.json` | ~20 KB | 渲染与排障（`judged.json` 是旧版产物，仅历史目录还有） | **每个自然日只留最新一轮**，7 天后全删 |
 | `email/preview.*` | ~47 KB | 仅 `--no-email` 时生成 | 同上 |
-| `sandbox/logs/daily-*.log` | 2~3 KB/天 | 跨轮次排障 | 30 天 |
+| `sandbox/logs/daily-*.log` | 2~3 KB/天 | 调度层日志（谁在什么时候启动/跳过/失败） | 30 天 |
+| `sandbox/logs/step-<日期>-<步骤>.log` | 采集约 20~60 KB，其余 &lt;5 KB | **子进程完整输出**：每个查询的条数/耗时/模式、失败原因 | 30 天（与上面同一条规则） |
 | `sandbox/diag/<时间>/*.jpg` | ~0.25 MB/张，每轮 ≤3 张 | 失败现场 | 3 天，总数 ≤50 |
+
+**步骤日志（2026-11-16 起）**：`run_step` 不再用 `capture_output` 把子进程输出攥在内存里，
+而是直接写文件，**成功也保留**。之前失败时只取最后 6 行、而且 `stderr` 非空时完全不看 `stdout`，
+11-13「10 个查询失败但查不出原因」就是这么来的。
+
+**静默超时**：`automation.silent_timeout_min`（默认 15）——连续 N 分钟日志文件没有任何增长，
+就判定卡死，`taskkill /T` 杀掉整棵进程树（含 Playwright 的 node driver），然后 `--resume` 续采。
+
+- 只给**采集**开；计划 / 种子 / 判定仍只有整步预算（墙钟）
+- 阈值不能设小于 12 分钟：单查询最坏 ≈6 分钟（连续 502 的 30/90/180 退避），
+  加一次 240 秒冷却，合法沉默可达 10 分钟
+- 依赖 `PYTHONUNBUFFERED=1`（`child_env()` 已设）。不加这行，输出攒在 8KB 缓冲里，
+  文件不增长，**正常任务会被误杀**
 
 清理在每次 `--run` 结束时**自动执行**，也可以手动：
 
@@ -485,5 +506,6 @@ python scripts/doctor.py --llm    # 额外测一次模型连通
 | 加模板骨架（新的「XX变装」写法） | `keywords.json` → `模式层.模板骨架` |
 | 调门槛（嫌少/嫌多） | `config/sources.yaml` → `threshold` |
 | 调日报条数 | `config/sources.yaml` → `judge.max_hotspots` |
+| 调「多久没输出算卡死」/ 验证码自动换会话次数 | `config/sources.yaml` → `automation.silent_timeout_min` / `verify_retries` |
 | 改排版 | `src/report/render.py` |
 | 加新数据源 | `src/collectors/` 下新增，`main._collect` 里挂上 |
