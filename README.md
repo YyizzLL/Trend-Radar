@@ -60,7 +60,7 @@
 ## 快速开始
 
 ```bash
-git clone <repo> && cd 产品探索
+git clone https://github.com/YyizzLL/Trend-Radar.git && cd Trend-Radar
 
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -126,7 +126,7 @@ python -m src.main --run           # 判定 + 出日报
 ## 目录结构
 
 ```
-产品探索/
+Trend-Radar/
 ├── CoreAssets/          判定准则与词库（唯一来源）
 │   ├── AgentRole.md     角色、读取顺序、工作路径
 │   ├── InputOutput.md   数据契约：输入字段用途、输出格式
