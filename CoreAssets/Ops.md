@@ -73,7 +73,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | 脚本 | 职责 | 什么时候用 |
 |---|---|---|
 | `launch_edge.py` | 启动带调试端口的 Edge（脱离父进程，不被回收）；`--check` 只查端口 | 每次跑批前 |
-| `doctor.py` | 环境自检：依赖 / `.env` / 代理 / 9222 / 数据规模 / 模型开关。有问题给退出码 1 | **出任何问题先跑它** |
+| `doctor.py` | 环境自检：依赖 / 时区 / `.env` / 代理 / 9222 / **词库** / 数据规模 / 模型开关。有问题给退出码 1 | **出任何问题先跑它** |
 | `collect_seeds.py` | 抓 tunbang 聚合榜（娱乐榜 + 微博榜）→ 模型判「有没有二创价值」→ 转成抖音查询词，写 `data/input/hot_seeds.json`。失败不阻塞跑批 | 生成计划之前 |
 | `plan_queries.py` | 生成当日检索计划 `data/input/query_plan.json`（歌名/挑战/主体/发现/热种五类配额）；挑战类先取热榜、再用上轮结果补齐 | 每次采集前 |
 | `collect_douyin.py` | 按 `query_plan.json` 用 CDP 采集 → `data/input/douyin_latest.json`；支持 `--resume` / `--limit` / `--scroll` / `--max-empty` / `--max-shots` / `--page-recycle` / `--spa`（改词优先，实验）/ `--retries` / `--select-timeout` / `--empty-cooldowns`（风控窗口里用「快速浅扫」：`--retries 1 --select-timeout 8 --empty-cooldowns 0`，靠多轮累积而不是单轮重试） | 每次跑批 |
@@ -470,8 +470,9 @@ python scripts/doctor.py          # 本地检查，不联网不花钱
 python scripts/doctor.py --llm    # 额外测一次模型连通
 ```
 
-它查：Python 版本、依赖、`.env` 四项密钥（打码显示）、代理变量、9222 端口、
-采集文件与检索计划的规模、模型层开关、最近一轮产物。有问题给出退出码 1 和待办清单。
+它查：Python 版本、依赖、**时区（`Asia/Shanghai` 可用）**、`.env` 四项密钥（打码显示）、代理变量、
+9222 端口、**词库（`CoreAssets/keywords.json` 是否存在、主体是否为空）**、采集文件与检索计划的规模、
+模型层开关、最近一轮产物。有问题给出退出码 1 和待办清单。
 
 ### 三个已经踩过的环境坑
 

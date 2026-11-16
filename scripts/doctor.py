@@ -84,6 +84,48 @@ def check_env() -> None:
             warnings.append(f"{key} 未设置")
 
 
+def check_timezone() -> None:
+    """时区可用性。Windows 上 `tzdata` 是必需的，缺了 `ZoneInfo` 会直接抛错。"""
+    try:
+        from zoneinfo import ZoneInfo
+
+        ZoneInfo("Asia/Shanghai")
+        line(OK, "时区", "Asia/Shanghai 可用")
+    except Exception as exc:  # noqa: BLE001
+        failures.append("时区读取失败：pip install tzdata")
+        line(BAD, "时区", f"Asia/Shanghai 不可用：{exc}")
+
+
+def check_keywords() -> None:
+    """词库是地基：缺了它计划为空、采集 0 条、日报全空。
+
+    新 clone 下来最容易漏的就是这一步——README 写了，但 `doctor` 全绿会让人以为万事俱备。
+    """
+    from src.config import alias_map, keyword_layer, load_keywords, pattern_config
+
+    try:
+        kw = load_keywords()
+    except FileNotFoundError:
+        failures.append("缺少 CoreAssets/keywords.json（照 CoreAssets/keywords.template.md 建一个）")
+        line(BAD, "词库", "不存在：CoreAssets/keywords.json")
+        return
+    except Exception as exc:  # noqa: BLE001
+        failures.append(f"词库解析失败：{exc}")
+        line(BAD, "词库", f"解析失败：{exc}")
+        return
+
+    subjects = keyword_layer(kw, "锚点层", "主体")
+    skeletons = pattern_config(kw)["skeletons"]
+    aliases = alias_map(kw)
+    if not subjects:
+        failures.append("词库 `锚点层.主体` 为空 → 计划为空、采集 0 条、日报全空")
+        line(BAD, "词库", "主体 0 个（硬门槛）")
+        return
+    line(OK, "词库", f"主体 {len(subjects)} 个｜骨架 {len(skeletons)} 条｜别名 {len(aliases)} 组")
+    if not skeletons:
+        warnings.append("`模式层.模板骨架` 为空：抓不到模板/挑战类素材，只剩 BGM")
+
+
 def check_proxy() -> None:
     keys = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy")
     live = {k: os.environ[k] for k in keys if os.environ.get(k)}
@@ -210,9 +252,11 @@ def main() -> int:
     print("== 环境自检 ==")
     check_python()
     check_deps()
+    check_timezone()
     check_env()
     check_proxy()
     check_edge()
+    check_keywords()
     check_data()
     check_llm_cfg()
     check_runs()

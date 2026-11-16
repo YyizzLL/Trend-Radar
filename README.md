@@ -66,15 +66,21 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 
 cp .env.example .env          # 再填 key，见下一节
-cp CoreAssets/keywords.template.md /tmp/kw.md       # 照着建 CoreAssets/keywords.json
+# 照着 CoreAssets/keywords.template.md 建 CoreAssets/keywords.json（仓库里没有这份，必须自己填）
 
-python scripts/doctor.py      # 自检：依赖 / 密钥 / 端口 / 词库
+python scripts/doctor.py      # 自检：依赖 / 时区 / 密钥 / 端口 / 词库 / 数据
 python scripts/launch_edge.py # 启动 Edge，然后在窗口里扫码登录抖音
 python scripts/collect_douyin.py   # 采集（第一次建议加 --limit 3 试试）
 python -m src.main --run           # 判定 + 出日报
 ```
 
 产物在 `sandbox/runs/<时间戳>/report.md`。
+
+想让它每天自动跑，再注册计划任务（09:00 主跑 + 登录后 2 分钟 + 11:30 失败重试）：
+
+```bash
+python scripts/install_task.py        # --query 看状态 / --remove 删除 / --run-now 立刻跑一次
+```
 
 > **不需要** `playwright install`。这里用的是 `connect_over_cdp` 连已有浏览器，
 > 不下载浏览器二进制。
@@ -137,6 +143,9 @@ Trend-Radar/
 │
 ├── config/sources.yaml  数据源、门槛、投递、模型层开关
 ├── src/                 代码
+│   ├── main.py          命令行入口（--run / --prune / --clean）
+│   ├── constants.py     共用常量 + 采集退出码（EXIT_*，唯一定义处）
+│   ├── deps.py          依赖清单（跑批预检与 doctor 共用）
 │   ├── collectors/      抖音 / B站 / QQ音乐 / BGM 采样
 │   ├── normalize/       归一、实体抽取、聚合、文案聚类
 │   ├── judge/           判定（领域过滤、门槛、配额、复用治理）
@@ -147,9 +156,13 @@ Trend-Radar/
 ├── scripts/
 │   ├── daily_run.py     每日总入口（锁 → Edge → 计划 → 采集 → 出报 → 发信）
 │   ├── doctor.py        环境自检，出问题先跑它
+│   ├── launch_edge.py   启动带调试端口的 Edge（扫码登录在这里做）
+│   ├── install_task.py  注册 Windows 计划任务（--query / --remove / --run-now）
 │   ├── collect_douyin.py  采集（CDP 驱动，支持 --resume 续采）
 │   ├── collect_seeds.py  抓聚合榜找「今天该搜什么」（可选，失败不影响跑批）
 │   ├── plan_queries.py  生成当日检索计划
+│   ├── build_keywords.py  重建词库的主体名单与画像
+│   ├── review_phrases.py  复用短语的标签判定（--auto 走模型）
 │   └── probe/           开发期探索工具，非运行必需
 │
 ├── data/                运行时数据（内容不入库，只留目录骨架）
