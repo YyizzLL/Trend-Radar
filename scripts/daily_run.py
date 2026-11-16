@@ -507,11 +507,29 @@ def main() -> int:
         else:
             log(f"未归档：{why}")
 
+        # 手动补发（--email-only）也要记锁。
+        # 否则「失败重试」触发器（默认 11:30）看到锁还停在前一天，会误判
+        # 「新的一天」再跑一轮采集——2026-11-16 实际发生：11:09 手动补发归档成功，
+        # 11:30 重试触发器照样启动，又多采了一轮、又发了一封告警。
         if not args.email_only:
             lock.status = "success"
             lock.finished_at = now_iso()
             lock.note = f"邮件已发送；运行目录 {run_dir.name}"
             save_lock(lock)
+        elif do_archive:
+            # 归档目录名就是日报日期。试发（--no-archive）不写锁，
+            # 因为那不是「今天已经交付过」。
+            save_lock(
+                Lock(
+                    date=dest.name,
+                    status="success",
+                    trigger="manual",
+                    attempts=1,
+                    started_at=now_iso(),
+                    finished_at=now_iso(),
+                )
+            )
+            log(f"已更新每日锁：{dest.name} = success")
         return 0
 
     except Exception as exc:  # noqa: BLE001

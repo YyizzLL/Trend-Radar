@@ -249,6 +249,15 @@ python scripts/daily_run.py --email-only        # 3) 用今天最新一版真发
 
 试跑只产生 `sandbox/runs/<时间戳>/`，`data/daily/` 与 `prune` 都不会碰它。
 
+**`--email-only` 归档成功后会写单日锁**（2026-11-16 起）。
+原因：当天如果手工补跑并 `--email-only` 补发过，锁不更新的话，11:30 的失败重试触发器
+会看到锁还停在前一天，误判「新的一天」再跑一轮采集。
+加 `--no-archive` 的试发不写锁——那不是「今天已交付」。
+
+> ⚠️ 手动串脚本（`collect_seeds` → `plan_queries` → `collect_douyin` → `src.main --run --prod`）
+> **不会写锁**，写锁是 `daily_run.py` 的职责。手动跑完记得补一次 `--email-only`，
+> 或者跑批前加 `--force`。
+
 第 2 步的产物在 `sandbox/runs/<ts>/email/preview.html`，可直接在浏览器里看手机/PC 效果。
 
 ### 5.5.3 注册定时任务
