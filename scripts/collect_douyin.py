@@ -60,7 +60,13 @@ from src.config import (  # noqa: E402
     load_sources,
     subject_profiles,
 )
-from src.constants import TYPE_QUERY  # noqa: E402
+from src.constants import (  # noqa: E402
+    EXIT_EDGE,
+    EXIT_LOGIN,
+    EXIT_PAGE,
+    EXIT_VERIFY,
+    TYPE_QUERY,
+)
 from src.judge.anchor import context as anchor_context  # noqa: E402
 from src.judge.anchor import match_subject  # noqa: E402
 
@@ -217,7 +223,8 @@ def _new_page(ctx):
     return ctx.new_page()
 
 
-# 502 的退避比「空结果」长得多：网关故障通常按分钟恢复，5/15/45 秒等于没等
+# 502 的退避比「空结果」长得多：网关故障通常按分钟恢复，5/15/45 秒等于没等。
+# 默认值；`sources.douyin_search.gateway_backoff` 可覆盖（见 main）。
 GATEWAY_BACKOFF = (30, 90, 180)
 
 
@@ -546,10 +553,10 @@ def run_query(searcher: Searcher, keyword: str, scroll: int, retries: int,
                     diag.capture(page, keyword, "人机验证")
                     print("\n✘ 检测到抖音人机验证，采集中止")
                     print("  请在 Edge 窗口手动完成验证（点击形状相同的物体），然后重跑")
-                    print("  退出码 3 = 需要人工介入，重试无效")
+                    print(f"  退出码 {EXIT_VERIFY} = 需要人工介入，重试无效")
                     if diag.dir:
                         print(f"  现场截图：{diag.dir}")
-                    sys.exit(3)
+                    sys.exit(EXIT_VERIFY)
                 last_err = "空结果"
                 _pause(page, backoff, keyword)
                 backoff *= 3
@@ -631,13 +638,17 @@ def main() -> int:
     args = ap.parse_args()
 
     # 调试/验证时把产物写到 sandbox，不碰 data/input 的真实数据
-    global PLAN, OUT
+    global PLAN, OUT, GATEWAY_BACKOFF
     if args.plan:
         PLAN = Path(args.plan)
     if args.out:
         OUT = Path(args.out)
 
     dcfg = load_sources().get("sources", {}).get("douyin_search", {})
+    # 502 退避序列可调：网关故障的恢复时间随环境变化，写死在代码里只能靠改代码调
+    backoff_cfg = dcfg.get("gateway_backoff") or []
+    if backoff_cfg:
+        GATEWAY_BACKOFF = tuple(int(x) for x in backoff_cfg)
     delay_min = float(dcfg.get("delay_min", 8.0))
     delay_max = float(dcfg.get("delay_max", 15.0))
     retries = args.retries or int(dcfg.get("retries", 3))
@@ -731,8 +742,8 @@ def main() -> int:
             print("[错误] 连不上 127.0.0.1:9222 —— Edge 没起来，或调试端口被别的进程占了。")
             print("       先确认：python scripts/launch_edge.py --check")
             print(f"       原始错误：{first}")
-            # 退出码 3 交给 daily_run：它会重启 Edge 后用 --resume 续采
-            raise SystemExit(3) from None
+            # EXIT_EDGE 交给 daily_run：它会重启 Edge 后用 --resume 续采
+            raise SystemExit(EXIT_EDGE) from None
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         # 新建自己的页签：复用 ctx.pages[0] 会关掉用户正在看的页面
         searcher = Searcher(ctx, days, use_spa=True, spa_first=args.spa)
@@ -754,7 +765,7 @@ def main() -> int:
                 except Exception as exc:  # noqa: BLE001
                     print(f"[中止] 无法新建页签：{exc}")
                     save_atomic(payload)
-                    return 4
+                    return EXIT_PAGE
 
             try:
                 t0 = time.time()
@@ -787,15 +798,15 @@ def main() -> int:
                     except RuntimeError:
                         print("[中止] 登录态失效，请先在 Edge 里重新登录抖音")
                         save_atomic(payload)
-                        return 3
+                        return EXIT_LOGIN
                 if not recovered:
                     print("[中止] 重建页签 3 次仍失败，已采部分已保存，可用 --resume 续采")
                     save_atomic(payload)
-                    return 4
+                    return EXIT_PAGE
             except RuntimeError:
                 print("[中止] 登录态失效，请先在 Edge 里重新登录抖音")
                 save_atomic(payload)
-                return 3
+                return EXIT_LOGIN
 
             fresh = 0
             for it in items:

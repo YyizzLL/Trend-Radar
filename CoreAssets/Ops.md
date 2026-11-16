@@ -32,6 +32,8 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `main.py` | 命令行入口，串起采集 → 过滤 → 抽取 → 聚合 → 判定 → 渲染 → 落盘 |
 | `config.py` | 读 `config/sources.yaml` 与 `keywords.json` |
 | `models.py` | 数据模型：`Candidate`（一条内容）、`Material`（素材卡）、`EntityHit`、`SourceStatus` |
+| `constants.py` | 共用常量：`TYPE_USAGE` / `TYPE_RANK` / `TYPE_QUERY`，以及**采集退出码**（`EXIT_*`，唯一定义处） |
+| `deps.py` | 依赖清单 `REQUIRED_MODULES`：`daily_run.ensure_deps` 与 `doctor.check_deps` 共用一份 |
 | `collectors/http.py` | 统一 HTTP：超时、重试、单源频控 |
 | `collectors/douyin_hot.py` | 抖音热榜（**综合新闻榜**；偶尔出现挑战词，不是主要来源，实测常为 0） |
 | `collectors/douyin_search.py` | 读 Agent 采集好的抖音搜索结果 JSON |
@@ -110,13 +112,13 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 |---|---|
 | `run` | 时区、UA、超时 |
 | `sources.douyin_hot` | 热榜开关、条数 |
-| `sources.douyin_search` | 输入文件路径、`publish_time`（整页搜索 URL 的时间窗）、`max_queries` / `scroll` / `delay_min~max` / `retries` / 四类 `quota`；内容级时效门槛在 `threshold.max_age_days` |
+| `sources.douyin_search` | 输入文件路径、`publish_time`（整页搜索 URL 的时间窗）、`max_queries` / `scroll` / `delay_min~max` / `retries` / `gateway_backoff`（502 退避序列）/ 四类 `quota`；内容级时效门槛在 `threshold.max_age_days` |
 | `sources.bili_search` | 组合数、每个组合取几条、请求间隔 |
 | `threshold` | `min_likes` / `max_age_days` / `percentile` |
 | `sources.qq_music` | 榜单 id 列表、`max_rank`、`qps_ms`（换榜间隔，代码真的会读） |
 | `sources.bgm_sampler` | 采样开关、预算、每素材条数、缓存 TTL、推断比例 |
 | `judge` | `max_hotspots` / `max_cross` / `per_anchor_cap`（按**主体**计） / `recent_days` / `phrase_min_videos` / `ambiguous_anchors` / `repeat_window_days` / `max_repeat_cards` / `repeat_growth_min` |
-| `automation` | `daily_time` / `boot_delay_seconds` / `retry_time`（`install_task.py` 生成触发器时读）／`edge_headless`／各步骤超时；`collect_timeout_min` 是**整个采集阶段的预算**，另有 `collect_retries` / `collect_retry_wait_s` |
+| `automation` | `daily_time` / `boot_delay_seconds` / `retry_time`（`install_task.py` 生成触发器时读）／`edge_headless`／各步骤超时；`collect_timeout_min` 是**整个采集阶段的预算**，另有 `collect_retries` / `collect_retry_wait_s`；`stale_running_min`（僵尸锁阈值）/ `max_attempts`（单日最多尝试次数） |
 | `delivery.email` | `enabled`（false 等同 `--no-email`）、SMTP 服务器、附件开关、邮件内各区块条数上限 |
 | `cleanup` | 分层清理：`heavy_days` / `log_days` / `diag_days` / `diag_max` / `max_days` |
 
@@ -308,15 +310,31 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 - 采集**部分**失败 → 用已采部分出报，邮件底部黄条写明「抖音采集仅覆盖 15/33 个查询（18 个失败或未采完），今日结果可能不完整」
   （覆盖度来自 `douyin_latest.json` 的 `plan_total` 与每个查询的 `error`，不靠解析日志文本）
 - 数据源整体失败 → 黄条写「数据源异常：xxx」
-- 采集中断（**9222 仍通、页签被关闭**）→ 采集进程内先按 5/10/15 秒重建页签重试；仍失败则退出码 4
-- 整轮采集失败 → `daily_run` 按 `collect_retries`（默认 3）重试，每次间隔 60 秒、自动加 `--resume`；
+- 采集中断（**9222 仍通、页签被关闭**）→ 采集进程内先按 5/10/15 秒重建页签重试；仍失败则以退出码 4 交给 `daily_run` 续采
+- 整轮采集失败 → `daily_run` 按 `collect_retries`（默认 4）重试，每次间隔 60 秒、自动加 `--resume`；
   总时长受 `collect_timeout_min`（90 分钟）约束
 - 今天已有部分采集结果（`douyin_latest.json` 是当天的且成功数 < 计划数）→ 自动加 `--resume`
-- **抖音弹人机验证**（「点击两个形状相同的物体」）→ 采集脚本识别后以 **退出码 3** 中止，
-  打印「请在 Edge 窗口完成验证」，`daily_run` 见到 exit=3 **不重试**（重试只会再等一轮）。
-  处理：在 Edge 窗口手动点完验证，再重跑。2026-11-15 因为不认识验证页，死等 90 分钟预算耗尽。
 - 登录失效 / Edge 起不来 → 不发空报，改发一封「运行失败」告警邮件，锁记为 `failed`
 - 发信失败 → 自动重试一次；仍失败则保留 `report.md`，锁记 `failed`（当天可再触发一次）
+
+**采集退出码（唯一来源：`src/constants.py`）**
+
+| 码 | 常量 | 含义 | `daily_run` 的处理 |
+|---|---|---|---|
+| 0 | `EXIT_OK` | 跑完（**不代表采全**，覆盖度另算） | 检查覆盖率，不足则续采 |
+| 3 | `EXIT_VERIFY` | 人机验证 | **不重试**，告警「请人工过验证」 |
+| 4 | `EXIT_PAGE` | 页签 / CDP 会话救不回来 | 换进程 `--resume` 续采 |
+| 5 | `EXIT_EDGE` | 连不上 `127.0.0.1:9222` | 重启 Edge 后 `--resume` |
+| 6 | `EXIT_LOGIN` | 登录态失效 | **不重试**，告警「请重新扫码」 |
+
+3 和 6 属于「重试只会再等一轮」，所以立刻停；4 和 5 可以靠换进程恢复。
+
+验证页长这样：页面中央弹「点击两个形状相同的物体」，搜索页停在骨架屏、一张卡片都没有。
+2026-11-15 就是因为不认识它，死等 90 分钟预算耗尽；11-16 加了正文文案检测，
+11:30 那轮 2 分钟就停下来发了告警。
+
+2026-11-16 之前 3 被前三种情况共用，`daily_run` 靠字符串 `"exit=3"` 猜语义，
+结果「连不上 Edge」被当成验证码，重启 Edge 的恢复路径永远走不到——现在按码分支。
 
 ### 5.6 日志、诊断与磁盘清理
 

@@ -15,6 +15,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from src.constants import EXIT_EDGE  # noqa: E402
+
 PROFILE = ROOT / ".edge-cdp"
 CANDIDATES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -71,7 +75,7 @@ def main() -> int:
             return 0
         time.sleep(1)
     print("启动超时：端口未就绪", file=sys.stderr)
-    return 3
+    return EXIT_EDGE
 
 
 if __name__ == "__main__":

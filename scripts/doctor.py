@@ -22,6 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.deps import REQUIRED_MODULES  # noqa: E402
+
 OK, WARN, BAD = "✓", "⚠", "✗"
 failures: list[str] = []
 warnings: list[str] = []
@@ -40,8 +42,10 @@ def check_python() -> None:
 
 
 def check_deps() -> None:
-    # 与 requirements.txt 对齐：项目用 httpx，不是 requests
-    mods = ("playwright", "yaml", "dotenv", "pydantic", "httpx")
+    # 清单在 src/deps.py，与 daily_run.ensure_deps 共用一份——原来两处各写一遍，
+    # 加上 requirements.txt 就是三份，漏改一处就会「doctor 说没事、跑批却崩」。
+    # 这里做真实 import 而不是 find_spec：doctor 是排障工具，要能抓到「装了但坏了」。
+    mods = REQUIRED_MODULES
     missing = []
     for mod in mods:
         try:

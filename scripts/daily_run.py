@@ -43,15 +43,23 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.config import load_sources  # noqa: E402
+from src.constants import (  # noqa: E402
+    EXIT_EDGE,
+    EXIT_LOGIN,
+    EXIT_NEEDS_HUMAN,
+    EXIT_VERIFY,
+)
 from src.deliver import digest as digest_mod  # noqa: E402
 from src.deliver.archive import archive_run  # noqa: E402
 from src.deliver.email_html import render_html, render_text  # noqa: E402
 from src.deliver.smtp import load_config as load_email_config, send as send_email  # noqa: E402
+from src.deps import missing_modules  # noqa: E402
 
 LOCK_PATH = ROOT / "data" / "state" / "daily_lock.json"
 DAILY_DIR = ROOT / "data" / "daily"
 LOG_DIR = ROOT / "sandbox" / "logs"
 RUNS_DIR = ROOT / "sandbox" / "runs"
+# 默认值；`automation.stale_running_min` / `automation.max_attempts` 可覆盖
 STALE_RUNNING_MIN = 90      # running 超过这么久视为僵尸锁
 MAX_ATTEMPTS = 2
 
@@ -121,11 +129,21 @@ def delivered(date: str) -> bool:
     return (DAILY_DIR / date / "sent.json").exists()
 
 
-def decide(lock: Lock, today: str, force: bool) -> tuple[bool, str]:
+def decide(
+    lock: Lock,
+    today: str,
+    force: bool,
+    *,
+    max_attempts: int = MAX_ATTEMPTS,
+    stale_running_min: int = STALE_RUNNING_MIN,
+) -> tuple[bool, str]:
     """返回 (是否继续, 原因)。
 
     顺序有讲究：`--force`（用户明确要求）优先，其次看「今天交付过没有」这个事实，
     最后才是锁的状态机（并发 / 僵尸锁 / 失败重试）。
+
+    两个阈值由 `automation.max_attempts` / `automation.stale_running_min` 传入，
+    默认值与历史行为一致——参数化只是为了让它们可调，不改判断。
     """
     if force:
         return True, "force"
@@ -137,10 +155,10 @@ def decide(lock: Lock, today: str, force: bool) -> tuple[bool, str]:
         return False, f"今天已成功（{lock.finished_at or lock.started_at}）"
     if lock.status == "running":
         age_min = (time.time() - lock.started_ts) / 60 if lock.started_ts else 0
-        if age_min < STALE_RUNNING_MIN:
+        if age_min < stale_running_min:
             return False, f"另一路径正在跑（已 {age_min:.0f} 分钟）"
         return True, "僵尸锁，抢占重跑"
-    if lock.status == "failed" and lock.attempts >= MAX_ATTEMPTS:
+    if lock.status == "failed" and lock.attempts >= max_attempts:
         return False, f"今日已失败 {lock.attempts} 次，不再重试"
     return True, "上次失败，重试"
 
@@ -167,6 +185,22 @@ def child_env() -> dict[str, str]:
     return env_vars
 
 
+class StepFailed(RuntimeError):
+    """子进程非零退出。
+
+    为什么要有这个类：原来调用方靠 `"exit=3" in str(exc)` 猜语义，
+    于是「连不上 Edge」被当成「人机验证」，恢复路径永远走不到。
+    退出码由 `src.constants` 统一编号，这里只负责原样带上来。
+    """
+
+    def __init__(self, step: str, returncode: int, tail: str = "") -> None:
+        self.step = step
+        self.returncode = returncode
+        self.tail = tail
+        msg = f"{step} 失败（exit={returncode}）"
+        super().__init__(f"{msg}：{tail}" if tail else msg)
+
+
 def run_step(name: str, args: list[str], timeout: int) -> None:
     log(f"▶ {name}：{' '.join(args[-2:])}")
     started = time.time()
@@ -182,8 +216,8 @@ def run_step(name: str, args: list[str], timeout: int) -> None:
     )
     cost = time.time() - started
     if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-6:]
-        raise RuntimeError(f"{name} 失败（exit={proc.returncode}）：" + " / ".join(tail))
+        tail = " / ".join((proc.stderr or proc.stdout or "").strip().splitlines()[-6:])
+        raise StepFailed(name, proc.returncode, tail)
     log(f"✔ {name}（{cost:.0f}s）")
 
 
@@ -332,11 +366,11 @@ def ensure_deps() -> None:
     2026-11-16 踩过：Python 从 3.13.12 升到 3.13.14，playwright 等包全丢，
     计划任务照常启动，一路跑到采集才 `ModuleNotFoundError`，白白耗掉一个早上。
     这里提前拦住，报错里直接给修复命令。
-    """
-    import importlib.util
 
-    need = ("playwright", "httpx", "pydantic", "yaml", "dotenv")
-    missing = [m for m in need if importlib.util.find_spec(m) is None]
+    清单在 `src/deps.REQUIRED_MODULES`，与 `doctor.py` 共用一份——
+    原来两处各写一遍，加上 requirements.txt 就是三份，漏改一处就会「doctor 说没事、跑批却崩」。
+    """
+    missing = missing_modules()
     if missing:
         raise SystemExit(
             "缺少依赖：" + ", ".join(missing) + "\n"
@@ -371,7 +405,11 @@ def main() -> int:
     if not args.email_only:
         # 判定在依赖检查之前：今天已经交付过时，环境坏没坏都不该再启动，
         # 更不该因此发一封「运行失败」的告警（2026-11-16 的 11:30 就是这样多跑一轮）。
-        ok, why = decide(lock, today, args.force)
+        ok, why = decide(
+            lock, today, args.force,
+            max_attempts=int(auto_cfg.get("max_attempts", MAX_ATTEMPTS)),
+            stale_running_min=int(auto_cfg.get("stale_running_min", STALE_RUNNING_MIN)),
+        )
         log(f"启动判定：{why}")
         if not ok:
             print(f"跳过：{why}")
@@ -447,15 +485,32 @@ def main() -> int:
                         log(f"覆盖度 {ok_n}/{planned}")
                         break
                     except Exception as exc:  # noqa: BLE001
-                        # exit=3 是采集脚本识别的「人机验证」：需要人工在 Edge 窗口过验证。
-                        # 重试只会再等一轮，直接停。
-                        if "exit=3" in str(exc):
-                            log("检测到抖音人机验证，停止重试——请在 Edge 窗口完成验证后重跑")
+                        # 退出码语义统一在 src/constants：3 验证码 / 4 页签 / 5 连不上 Edge / 6 登录失效。
+                        # 3 和 6 必须人工介入，重试只会再等一轮；4 和 5 可以换进程续采。
+                        code = getattr(exc, "returncode", None)
+                        if code in EXIT_NEEDS_HUMAN:
+                            if code == EXIT_VERIFY:
+                                log("检测到抖音人机验证，停止重试——请在 Edge 窗口完成验证后重跑")
+                            else:
+                                log("抖音登录态失效，停止重试——请在 Edge 窗口重新扫码登录")
                             raise
                         if tries >= max_tries or time.time() >= deadline:
                             raise
                         log(f"采集中断（第 {tries}/{max_tries} 次）：{str(exc)[:120]}")
-                        if port_ready():
+                        if code == EXIT_EDGE:
+                            # 连不上 CDP：端口可能被占，或浏览器假死。
+                            # 自己起的那个直接重启；用户自己开着的不要动，只提示。
+                            if edge_proc is not None and edge_proc.poll() is None:
+                                edge_proc.terminate()
+                                edge_proc = None
+                                log("9222 连不上，已结束本次启动的 Edge，准备重开")
+                            else:
+                                log("9222 连不上，且不是本次启动的 Edge——"
+                                    "确认端口没被别的程序占用")
+                            edge_proc = ensure_edge(
+                                bool(auto_cfg.get("edge_headless", False))
+                            ) or edge_proc
+                        elif port_ready():
                             log("9222 仍通（疑似页签被关闭），直接续采")
                         else:
                             log("9222 不通（Edge 未就绪或被回收），重启 Edge 后续采")

@@ -21,3 +21,19 @@ TYPE_QUERY: dict[str, list[str]] = {
     "rapper": ["beat", "卡点"],
     "厂牌": ["新团", "练习生"],
 }
+
+# 采集进程的退出码。
+#
+# 这里是**唯一定义处**：`collect_douyin.py` 用它返回，`daily_run.py` 用它分支。
+# 2026-11-16 之前 3 被三种情况共用（验证码 / 连不上 Edge / 登录失效），
+# 而 daily_run 靠字符串 "exit=3" 猜语义，于是「重启 Edge 续采」那条恢复路径
+# 永远走不到。别再把新的失败类型塞进同一个码。
+EXIT_OK = 0
+EXIT_VERIFY = 3    # 人机验证：需要人在 Edge 窗口里点，重试无效
+EXIT_PAGE = 4      # 页签 / CDP 会话恢复失败：换进程 --resume 可续
+EXIT_EDGE = 5      # 连不上 127.0.0.1:9222：重启 Edge 可救
+EXIT_LOGIN = 6     # 登录态失效：需要重新扫码
+
+# 需要人工介入的退出码：重试只会再等一轮，直接停。
+EXIT_NEEDS_HUMAN = frozenset({EXIT_VERIFY, EXIT_LOGIN})
+
