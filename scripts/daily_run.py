@@ -514,7 +514,29 @@ def main() -> int:
         if not ok:
             print(f"跳过：{why}")
             return 0
-        ensure_deps()
+
+        try:
+            ensure_deps()
+        except SystemExit as exc:
+            # 依赖缺失是「任务启动了但什么都不会发生」的典型场景：
+            # 计划任务用 pythonw 跑时 stderr 是 None，SystemExit 的消息会直接消失，
+            # 结果只留一行「启动判定」在日志里（2026-11-16 早上就是这样，靠人发现）。
+            # 所以这里自己写锁 + 发告警，让它成为一封看得见的信。
+            reason = str(exc) or "依赖检查未通过"
+            log("✘ " + reason.splitlines()[0])
+            save_lock(
+                Lock(
+                    date=today,
+                    status="failed",
+                    trigger=args.trigger,
+                    attempts=(lock.attempts + 1) if lock.date == today else 1,
+                    started_at=now_iso(),
+                    finished_at=now_iso(),
+                    note=reason[:300],
+                )
+            )
+            notify_failure(reason, cfg)
+            return 1
 
         lock = Lock(
             date=today,

@@ -125,7 +125,8 @@ def build_xml(time_str: str, delay_min: int, retry_time: str = "11:30") -> str:
     <Hidden>false</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <!-- 3 小时：采集阶段预算 90 分钟 + 判定 10 + 种子/计划 10，最坏约 111 分钟 -->
+    <ExecutionTimeLimit>PT3H</ExecutionTimeLimit>
     <Priority>7</Priority>
   </Settings>
   <Actions Context="Author">

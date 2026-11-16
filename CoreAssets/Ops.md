@@ -279,6 +279,19 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 > 登录 +2min / 09:00 / **11:30（仅当前面失败且 attempts<2 时才真正执行）**。
 > 只要当天已经发过信（`data/daily/<日期>/sent.json`），任何触发器都不再启动。
 
+**任务绑定的是「运行 `install_task.py` 的那个解释器」。** 它取 `sys.executable` 同目录的
+`pythonw.exe` 写进任务，所以：
+
+- 用 `D:\python\python.exe scripts\install_task.py` 注册 → 任务跑 `D:\python\pythonw.exe`
+- 换了 Python 版本 / 重建 venv / 重装依赖 → **必须用新解释器重新注册一次**
+- 开发时用的解释器和任务绑的解释器可能不是同一个，**依赖要装在任务那个里面**
+
+2026-11-16 踩过：任务绑的是 `D:\python\pythonw.exe`（3.14），但依赖只装在另一个 Python 里，
+09:00 启动后立刻退出，而 pythonw 没有 stderr，报错直接消失，日志只留一行「启动判定」。
+现在 `ensure_deps()` 会兜底：缺依赖时写锁记 `failed` 并发一封「运行失败」告警，不再静默。
+
+验证方式：`python scripts/install_task.py --run-now`，再 `--query` 看「上次结果」是否为 `0`。
+
 单日锁的判断规则：
 
 | 锁状态 | 行为 |
