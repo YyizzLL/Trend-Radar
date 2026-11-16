@@ -90,6 +90,26 @@ AUTHOR_RE = re.compile(r"@([^\s@]{1,20})\s*$")
 SAFE_NAME_RE = re.compile(r"[^\w\u4e00-\u9fa5-]+")
 
 
+# 抖音的人机验证：出现这些文案说明被风控了，继续重试没用，必须人工过验证。
+# 2026-11-15 实测：页面弹「点击两个形状相同的物体」，脚本不认识，死等 90 分钟预算耗尽。
+_VERIFY_MARKERS = (
+    "点击两个形状相同的物体",
+    "请完成下列验证",
+    "拖动滑块",
+    "请选择所有",
+    "验证码",
+)
+
+
+def verify_blocked(page) -> bool:
+    """当前页面是不是人机验证。判正文文案，不依赖 DOM 结构，改版也不容易失效。"""
+    try:
+        text = page.inner_text("body", timeout=2000)
+    except Exception:  # noqa: BLE001
+        return False
+    return any(m in text for m in _VERIFY_MARKERS)
+
+
 class Diag:
     """失败现场记录：截图 + URL/标题/正文前 200 字。
 
@@ -97,7 +117,6 @@ class Diag:
     日志里都长一样，只有截图能区分。
     限量：每次采集最多 `max_shots` 张（默认 3），避免诊断本身把磁盘撑爆。
     """
-
     def __init__(self, root: Path, max_shots: int = 3) -> None:
         self.dir = root / datetime.now().strftime("%Y%m%d-%H%M")
         self.max_shots = max_shots
@@ -521,6 +540,16 @@ def run_query(searcher: Searcher, keyword: str, scroll: int, retries: int,
                     if rescued:
                         print("    ↳ 整页为空，改词救急拿到结果")
             if not cards:
+                # 先分辨是不是人机验证：这是「空结果」里唯一需要人工介入的情况。
+                # 重试再多次也没用，不如立刻停下来说清楚要人做什么。
+                if verify_blocked(page):
+                    diag.capture(page, keyword, "人机验证")
+                    print("\n✘ 检测到抖音人机验证，采集中止")
+                    print("  请在 Edge 窗口手动完成验证（点击形状相同的物体），然后重跑")
+                    print("  退出码 3 = 需要人工介入，重试无效")
+                    if diag.dir:
+                        print(f"  现场截图：{diag.dir}")
+                    sys.exit(3)
                 last_err = "空结果"
                 _pause(page, backoff, keyword)
                 backoff *= 3

@@ -22,6 +22,18 @@ _SIMILAR_MIN_COMMON = 4
 _SIMILAR_THRESHOLD = 0.6
 
 
+def similarity(a: str, b: str) -> float:
+    """两个短语的相似度 = 最长公共子串 / 较长那个词的长度。
+
+    低于 `_SIMILAR_MIN_COMMON` 个共同字直接返回 0，避免「逮捕」这种
+    两字巧合把两个不相干的词判成同一个。
+    """
+    common = _lcs_len(a, b)
+    if common < _SIMILAR_MIN_COMMON:
+        return 0.0
+    return common / max(len(a), len(b))
+
+
 def _lcs_len(a: str, b: str) -> int:
     """最长公共子串长度。短语都很短（<20 字），O(n·m) 够用。"""
     if not a or not b:

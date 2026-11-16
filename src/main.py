@@ -54,7 +54,7 @@ from .normalize.term import normalize as _norm
 from .normalize.merge import dedupe
 from .normalize.pattern import PatternMatcher
 from .report.render import render_report
-from .store.lifecycle import Lifecycle
+from .store.lifecycle import Lifecycle, similarity
 from .store.rundir import clean_old, new_run_dir, now_local, prune, write_json, write_text
 
 log = logging.getLogger("radar")
@@ -701,12 +701,46 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     # 顺序不能反 —— observe 会把新词的 first_seen 设成今天，先登记就读不到年龄了。
     # 为什么需要归一化：短语是 n-gram 切的，「你就这样闯进我」和「就这样闯进我的心窝」
     # 是同一条梗，不合并的话每轮都算新词，「常青老梗」永远标不出来（2026-11-13）。
+    seen_words: list[str] = []
     for p in phrases:
         word = str(p["phrase"])
         canon, rec = lifecycle.find_similar(word, "phrase")
+        # 和历史比不到，再和本轮已处理的比：
+        # n-gram 会让同一句话的不同切法在同一天一起冒出来（「上上上上上升期」
+        # 与「上上上上上上升期」），只查历史的话它们会被当成两个新词。
+        if not rec:
+            for w in seen_words:
+                if similarity(word, w) >= 0.6:
+                    canon = w
+                    break
         p["canonical"] = canon or word
         p["first_seen_days"] = lifecycle.age_days(canon or word, today)
         lifecycle.observe(word, "phrase", today)
+        seen_words.append(canon or word)
+
+    # 归一后去重：同一句的不同切法只保留被用得最多的一条，
+    # 否则「上上上上上升期」和「上上上上上上升期」会各占一行。
+    if phrases:
+        best: dict[str, dict] = {}
+        for p in phrases:
+            key = str(p.get("canonical") or p["phrase"])
+            # 优先保留「就是代表词本身」的那条，其次看覆盖率。
+            # 否则碎片可能因为条数多而顶掉完整句（「的世界末日几点要坠落」vs「他的世界末日几点要坠」）。
+            score = (str(p["phrase"]) == key, int(p.get("videos") or 0))
+            if key not in best:
+                best[key] = p
+                continue
+            cur = best[key]
+            cur_score = (str(cur["phrase"]) == key, int(cur.get("videos") or 0))
+            if score > cur_score:
+                best[key] = p
+        if len(best) < len(phrases):
+            kept_order = [best[str(p.get("canonical") or p["phrase"])] for p in phrases]
+            deduped: list[dict] = []
+            for p in kept_order:
+                if p not in deduped:
+                    deduped.append(p)
+            phrases = deduped
         # 新登记的碎片继承代表词的首见日期，让同一句的不同切法共享年龄
         if rec and canon and canon != word and lifecycle.data.get(word, {}).get("first_seen") == today:
             lifecycle.data[word]["first_seen"] = rec.get("first_seen", today)

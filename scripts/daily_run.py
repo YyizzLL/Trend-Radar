@@ -299,6 +299,24 @@ def should_archive(
     return True, f"当天尚无归档，写入 {archive_date}"
 
 
+def ensure_deps() -> None:
+    """跑批前检查关键依赖。
+
+    2026-11-16 踩过：Python 从 3.13.12 升到 3.13.14，playwright 等包全丢，
+    计划任务照常启动，一路跑到采集才 `ModuleNotFoundError`，白白耗掉一个早上。
+    这里提前拦住，报错里直接给修复命令。
+    """
+    import importlib.util
+
+    need = ("playwright", "httpx", "pydantic", "yaml", "dotenv")
+    missing = [m for m in need if importlib.util.find_spec(m) is None]
+    if missing:
+        raise SystemExit(
+            "缺少依赖：" + ", ".join(missing) + "\n"
+            "先跑：" + sys.executable + " -m pip install -r requirements.txt"
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--trigger", default="auto", choices=["auto", "boot", "schedule", "manual"])
@@ -311,6 +329,10 @@ def main() -> int:
     ap.add_argument("--allow-test", action="store_true",
                     help="允许从试跑轮次（run.json kind=test）发信；默认拒绝，避免把试跑稿发到邮箱")
     args = ap.parse_args()
+
+    # --email-only 只发信，不碰采集；其余模式都要跑管线
+    if not args.email_only:
+        ensure_deps()
 
     os.environ["RADAR_TRIGGER"] = args.trigger
     cfg = load_sources()
@@ -398,6 +420,11 @@ def main() -> int:
                         log(f"覆盖度 {ok_n}/{planned}")
                         break
                     except Exception as exc:  # noqa: BLE001
+                        # exit=3 是采集脚本识别的「人机验证」：需要人工在 Edge 窗口过验证。
+                        # 重试只会再等一轮，直接停。
+                        if "exit=3" in str(exc):
+                            log("检测到抖音人机验证，停止重试——请在 Edge 窗口完成验证后重跑")
+                            raise
                         if tries >= max_tries or time.time() >= deadline:
                             raise
                         log(f"采集中断（第 {tries}/{max_tries} 次）：{str(exc)[:120]}")

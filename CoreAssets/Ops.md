@@ -132,6 +132,11 @@ python -m pip install -r requirements.txt
 ```
 
 > `tzdata` 在 Windows 上必需，否则 `ZoneInfo("Asia/Shanghai")` 报错。
+>
+> ⚠️ **依赖绑在具体的 Python 版本上**。2026-11-16 踩过：运行时从 3.13.12 升到 3.13.14，
+> site-packages 不跟着走，playwright 等包全部丢失，计划任务照常启动、跑到采集才崩。
+> `daily_run.py` 现在会在启动时检查依赖并给出修复命令；手动跑脚本时若见到
+> `ModuleNotFoundError`，先 `pip install -r requirements.txt` 再试。
 
 ## 四、首次准备（只做一次）
 
@@ -285,6 +290,9 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 - 整轮采集失败 → `daily_run` 按 `collect_retries`（默认 3）重试，每次间隔 60 秒、自动加 `--resume`；
   总时长受 `collect_timeout_min`（90 分钟）约束
 - 今天已有部分采集结果（`douyin_latest.json` 是当天的且成功数 < 计划数）→ 自动加 `--resume`
+- **抖音弹人机验证**（「点击两个形状相同的物体」）→ 采集脚本识别后以 **退出码 3** 中止，
+  打印「请在 Edge 窗口完成验证」，`daily_run` 见到 exit=3 **不重试**（重试只会再等一轮）。
+  处理：在 Edge 窗口手动点完验证，再重跑。2026-11-15 因为不认识验证页，死等 90 分钟预算耗尽。
 - 登录失效 / Edge 起不来 → 不发空报，改发一封「运行失败」告警邮件，锁记为 `failed`
 - 发信失败 → 自动重试一次；仍失败则保留 `report.md`，锁记 `failed`（当天可再触发一次）
 
