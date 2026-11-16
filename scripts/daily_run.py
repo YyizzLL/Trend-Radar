@@ -7,6 +7,11 @@
 
 所以锁是状态机（status + attempts + started_at），不是布尔值。
 
+但**「今天交付过没有」不看锁，看 `data/daily/<日期>/sent.json`**：
+锁只是运行状态，任何一条漏写锁的发信路径都会让它失真（2026-11-16：11:09 手动补发
+归档成功，锁仍停在昨天，11:30 的重试触发器据此又整跑了一轮采集）。
+`sent.json` 只在邮件真的发出去后存在，是交付事实；两者分工见 `decide()`。
+
 用法：
     python scripts/daily_run.py                 # 正常跑（锁决定是否跳过）
     python scripts/daily_run.py --force         # 忽略锁
@@ -44,6 +49,7 @@ from src.deliver.email_html import render_html, render_text  # noqa: E402
 from src.deliver.smtp import load_config as load_email_config, send as send_email  # noqa: E402
 
 LOCK_PATH = ROOT / "data" / "state" / "daily_lock.json"
+DAILY_DIR = ROOT / "data" / "daily"
 LOG_DIR = ROOT / "sandbox" / "logs"
 RUNS_DIR = ROOT / "sandbox" / "runs"
 STALE_RUNNING_MIN = 90      # running 超过这么久视为僵尸锁
@@ -100,10 +106,31 @@ def save_lock(lock: Lock) -> None:
     )
 
 
+def delivered(date: str) -> bool:
+    """今天是否已经有一份**真的发出去**的日报。
+
+    判据用归档目录里的 `sent.json`，不是单日锁。两者的差别是「事实」与「状态」：
+    `data/daily/<日期>/sent.json` 只在邮件发送成功并归档后才会出现；
+    锁会被任何一条漏写锁的发信路径弄脏。
+
+    2026-11-16 就是这种情况：09:00 因缺依赖失败（锁 = failed）→ 11:09 手动补跑
+    并归档成功（sent.json 已存在）→ 11:30 的重试触发器读锁，仍判「新的一天」，
+    又整跑了一轮采集。锁没写对是那次的原因，但只要判据还在锁上，下一个新入口
+    还会再漏一次；盯住 sent.json 就不会。
+    """
+    return (DAILY_DIR / date / "sent.json").exists()
+
+
 def decide(lock: Lock, today: str, force: bool) -> tuple[bool, str]:
-    """返回 (是否继续, 原因)。"""
+    """返回 (是否继续, 原因)。
+
+    顺序有讲究：`--force`（用户明确要求）优先，其次看「今天交付过没有」这个事实，
+    最后才是锁的状态机（并发 / 僵尸锁 / 失败重试）。
+    """
     if force:
         return True, "force"
+    if delivered(today):
+        return False, f"今天已交付（data/daily/{today}/sent.json），不再自动重跑"
     if lock.date != today:
         return True, "新的一天"
     if lock.status == "success":
@@ -330,10 +357,6 @@ def main() -> int:
                     help="允许从试跑轮次（run.json kind=test）发信；默认拒绝，避免把试跑稿发到邮箱")
     args = ap.parse_args()
 
-    # --email-only 只发信，不碰采集；其余模式都要跑管线
-    if not args.email_only:
-        ensure_deps()
-
     os.environ["RADAR_TRIGGER"] = args.trigger
     cfg = load_sources()
     auto_cfg = cfg.get("automation", {}) or {}
@@ -346,11 +369,15 @@ def main() -> int:
     lock = load_lock()
     prev_lock = lock            # 预览/缺配置时用来还原，避免误占当天额度
     if not args.email_only:
+        # 判定在依赖检查之前：今天已经交付过时，环境坏没坏都不该再启动，
+        # 更不该因此发一封「运行失败」的告警（2026-11-16 的 11:30 就是这样多跑一轮）。
         ok, why = decide(lock, today, args.force)
-        log(f"锁判定：{why}")
+        log(f"启动判定：{why}")
         if not ok:
             print(f"跳过：{why}")
             return 0
+        ensure_deps()
+
         lock = Lock(
             date=today,
             status="running",
