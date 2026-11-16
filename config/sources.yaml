@@ -43,6 +43,10 @@ sources:
     gateway_backoff: [30, 90, 180]   # 502 的退避序列（秒）。网关故障按分钟恢复，别调太小
     page_recycle: 12       # 每 N 个查询换一次页签：单页签连开几十个搜索页会把渲染进程撑爆
                            # （2026-11-08 第 17 个查询时页签被关闭，浏览器还活着）
+    # 连续空结果（搜索页停在骨架屏、无验证码）的原地冷却：先等 240 秒，最多 2 次；
+    # 仍无改善才中止，交给 daily_run 按覆盖率续采。
+    empty_cooldown_s: 240
+    empty_cooldowns: 2
     quota:                 # 计划里的配额分配
       歌名: 15
       挑战: 10
@@ -165,6 +169,7 @@ automation:
   ensure_edge: true          # 跑之前检查 9222，未就绪则启动
   # ⚠️ 实测：headless 会被抖音拦到「验证码中间页」（卡片数 0），必须用窗口模式
   edge_headless: false
+  seed_timeout_min: 5        # 抓热点种子（tunbang + 模型筛）的单步预算
   plan_timeout_min: 5
   collect_timeout_min: 90    # 采集**整个阶段**的预算（含重试），不是单次上限
   collect_retries: 4         # 采集最多尝试几次：整轮失败、或「进程正常退出但覆盖率不足」都会续采
