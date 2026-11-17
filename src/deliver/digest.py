@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import TYPE_RANK
+from ..report.textmerge import merge as merge_text
 
 DEFAULT_LIMITS = {
     "circle": 8,          # 圈内素材
@@ -42,6 +43,8 @@ class Digest:
     phrases: list[dict[str, Any]] = field(default_factory=list)
     # 模型评估过的文案：每项含 phrase / use / usage / source / bgm
     phrase_eval: list[dict[str, Any]] = field(default_factory=list)
+    # 合并后的「今日文案」：整句簇 + 短语对齐后每条只出现一次（见 report/textmerge）
+    text_entries: list[dict[str, Any]] = field(default_factory=list)
     candidates: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -160,6 +163,14 @@ def build(run_dir: Path, limits: dict[str, int] | None = None) -> Digest:
         if str(p.get("use") or "") in {"use", "watch"}
     ][: lim["phrase_eval"]]
 
+    # 两个文案栏合成一份：整句簇与短语按相似度对齐，同一个梗只出一条
+    text_entries = [
+        e for e in merge_text(
+            list(extra.get("clusters") or []), list(extra.get("phrase_eval") or [])
+        )
+        if str(e.get("use") or "") in {"use", "watch"}
+    ][: lim["phrase_eval"] + lim["clusters"]]
+
     notes: list[str] = []
     failed = [s for s in meta.get("sources", []) if s.get("status") == "failed"]
     if failed:
@@ -196,6 +207,7 @@ def build(run_dir: Path, limits: dict[str, int] | None = None) -> Digest:
         chart_news=chart_news,
         phrases=phrases,
         phrase_eval=phrase_eval,
+        text_entries=text_entries,
         candidates=cand_rows,
         notes=notes,
     )
@@ -208,6 +220,11 @@ def subject_line(d: Digest) -> str:
         f"跨圈{c['cross']}",
         f"新歌{c['chart_news']}",
     ]
-    if c["clusters"]:
-        parts.append(f"文案{c['clusters']}")
+    # 文案数取「可直接用」的条数：合并后一栏里有 use + watch，
+    # 标题上写总数会让人以为都能直接用（2026-11-17 合并两栏后调整）。
+    usable = sum(1 for e in d.text_entries if e.get("use") == "use")
+    if not d.text_entries:
+        usable = c["clusters"]
+    if usable:
+        parts.append(f"文案{usable}")
     return f"【追星二创雷达】{d.date[5:] if d.date else ''}｜" + " ".join(parts)

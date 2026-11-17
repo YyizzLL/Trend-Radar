@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..models import Material, SourceStatus
 from ..normalize.cluster import CaptionCluster
 from .evidence import count_phrase
+from .textmerge import merge as merge_text
 
 _ICON = {"ok": "✅", "failed": "❌", "skipped": "⚪"}
 
@@ -35,10 +36,6 @@ def render_report(
     candidates = [m for m in materials if m.cls == "候选"]
     clusters = clusters or []
     dropped = sorted([m for m in materials if m.cls == "丢弃"], key=lambda m: -m.mentions)
-
-    # 文案分两档：能直接用的、需要改写的。skip 的不显示。
-    _usable = [p for p in (phrase_eval or []) if p.get("use") == "use"]
-    _watch = [p for p in (phrase_eval or []) if p.get("use") == "watch"]
 
     lines: list[str] = []
     lines.append(f"# 今日素材雷达 · {date_str}")
@@ -110,7 +107,81 @@ def render_report(
             )
     lines.append("")
 
-    if clusters:
+    # 文案两栏合并：整句簇（模板）与短语（可用/观察）按相似度对齐后只出一条。
+    # 两个数都保留：`整句` 是几乎一字不差的条数，`在用` 是提到这句话的内容数。
+    cluster_dicts = [
+        {
+            "rep": c.rep, "size": c.size, "likes_max": c.likes_max,
+            "likes_median": c.likes_median, "tags": c.tags,
+            "variants": c.variants, "members": c.members,
+        }
+        for c in clusters
+    ]
+    entries = merge_text(cluster_dicts, phrase_eval or []) if phrase_eval else []
+
+    if entries:
+        usable = [e for e in entries if e.get("use") == "use"]
+        watch = [e for e in entries if e.get("use") == "watch"]
+        lines.append(f"## 今日文案（{len(usable) + len(watch)} 条｜可直接用 {len(usable)} 条）")
+        lines.append("")
+        lines.append(
+            "> 「在用」是提到这句话的内容数，「整句」是几乎一字不差照抄的条数。"
+            "两个数差得越多，说明大家越爱改着写。"
+        )
+        lines.append("")
+        if not usable:
+            lines.append("> 今日没有判断为「可直接套用」的句子。下面「观察中」有需要改写的候选。")
+            lines.append("")
+        for i, e in enumerate(usable, 1):
+            lines.append(f"**{i}. {_cell(e['text'], 40)}**")
+            lines.append("")
+            nums = f"- 在用：{e['videos']} 条"
+            if e.get("size"):
+                nums += f"（整句 {e['size']}）"
+            if e.get("likes_max"):
+                nums += f"｜最高 {int(e['likes_max']):,} 赞"
+            hits = e.get("circle_hits")
+            if isinstance(hits, int):
+                nums += "｜跨圈" if hits == 0 else f"｜圈内 {hits}/{e['videos']}"
+            days = e.get("days")
+            if isinstance(days, int) and days >= 14:
+                nums += "｜常青老梗"
+            lines.append(nums)
+            if e.get("usage"):
+                lines.append(f"- 怎么用：{_cell(e['usage'], 40)}")
+            pair = "｜".join(x for x in (
+                f"出处：{_cell(e.get('source') or '', 20)}" if e.get("source") else "",
+                f"配套：{_cell(e.get('bgm') or '', 24)}" if e.get("bgm") else "",
+            ) if x)
+            if pair:
+                lines.append(f"- {pair}")
+            tags = " ".join(f"#{t}" for t in (e.get("tags") or [])[:5])
+            if tags:
+                lines.append(f"- 标签：{tags}")
+            vs = [v for v in dict.fromkeys(e.get("variants") or []) if v and v != e["text"]]
+            if vs:
+                lines.append("- 变体：" + "；".join(_cell(v, 24) for v in vs[:4]))
+            links = " ".join(
+                f"[{j + 1}]({m['url']})"
+                for j, m in enumerate(e.get("members") or [])
+                if isinstance(m, dict) and m.get("url")
+            )
+            if links:
+                lines.append(f"- 参考：{links}")
+            lines.append("")
+
+        if watch:
+            lines.append(f"**观察中（{len(watch)} 条｜需要改写或只适合特定画面）**")
+            lines.append("")
+            for e in watch:
+                note = e.get("usage") or ""
+                lines.append(
+                    f"- 「{_cell(e['text'], 26)}」{e['videos']} 条"
+                    + (f" — {_cell(note, 40)}" if note else "")
+                )
+            lines.append("")
+
+    elif clusters:
         lines.append(f"## 今日文案模板（{len(clusters)} 条）")
         lines.append("")
         lines.append("> 同一句文案被多条视频复制。常为歌词，标签里可能带歌名；可去抖音看它们配的 BGM/滤镜。")
@@ -149,51 +220,8 @@ def render_report(
             )
         lines.append("")
 
-    if phrase_eval:
-        # 模型评估过：分「能直接用」和「要改写」两档
-        lines.append(f"## 今日可用文案（{len(_usable)} 条）")
-        lines.append("")
-        if not _usable:
-            lines.append("> 今日没有判断为「可直接套用」的句子。下面「观察中」有需要改写的候选。")
-            lines.append("")
-        else:
-            lines.append(
-                "> 被多条视频共用、且脱离原语境仍成立。拿来当标题、字幕或开场白，比素材卡更直接。"
-            )
-            lines.append("")
-            lines.append("| 文案 | 在用 | 怎么用 | 出处 | 配套素材 |")
-            lines.append("|---|---|---|---|---|")
-            for p in _usable:
-                # 来源标注：圈内 N/M 条；全是跨圈就直说，让人自己判断能不能用
-                hits = p.get("circle_hits")
-                videos = p.get("videos") or 0
-                src_note = ""
-                if isinstance(hits, int):
-                    src_note = " · 跨圈" if hits == 0 else f" · 圈内 {hits}/{videos}"
-                days = p.get("first_seen_days")
-                if isinstance(days, int) and days >= 14:
-                    src_note += " · 常青老梗"
-                lines.append(
-                    f"| **{_cell(p['phrase'], 22)}** | {p['videos']} 条{src_note} "
-                    f"| {_cell(p.get('usage', ''), 30)} "
-                    f"| {_cell(p.get('source', ''), 18)} "
-                    f"| {_cell(p.get('bgm', ''), 26)} |"
-                )
-            lines.append("")
-
-        if _watch:
-            lines.append(f"**观察中（{len(_watch)} 条｜需要改写或只适合特定画面）**")
-            lines.append("")
-            for p in _watch:
-                note = p.get("usage") or p.get("sample") or ""
-                lines.append(
-                    f"- 「{_cell(p['phrase'], 26)}」{p['videos']} 条"
-                    + (f" — {_cell(note, 40)}" if note else "")
-                )
-            lines.append("")
-
-    elif phrases:
-        # 模型没开或失败：退回原始清单，别让这一栏空着
+    if not entries and not clusters and phrases:
+        # 没有模型评估、也没有整句簇：退回原始短语清单，别让这一栏空着
         lines.append(f"## 复用短语（{len(phrases)} 个｜文案梗线索）")
         lines.append("")
         lines.append("> 被多条不同视频共同使用，可能是正在传的文案梗。不直接进热点，供人工判断。")
@@ -207,7 +235,7 @@ def render_report(
             )
         lines.append("")
 
-    else:
+    elif not entries and not clusters:
         lines.append("## 复用短语（0 个｜文案梗线索）")
         lines.append("")
         lines.append(

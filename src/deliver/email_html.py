@@ -201,6 +201,77 @@ def _cluster_block(clusters: list[dict[str, Any]]) -> str:
     return "".join(blocks)
 
 
+def _text_block(entries: list[dict[str, Any]]) -> str:
+    """今日文案：整句簇 + 短语对齐后的一份名单（每句只出现一次）。"""
+    usable = [e for e in entries if e.get("use") == "use"]
+    watch = [e for e in entries if e.get("use") == "watch"]
+    if not usable and not watch:
+        return _empty("今日没有可用的文案")
+
+    parts: list[str] = []
+    for i, e in enumerate(usable, 1):
+        videos = int(e.get("videos") or 0)
+        size = int(e.get("size") or 0)
+        nums = f"在用 {videos} 条" + (f"（整句 {size}）" if size else "")
+        nums += f" ｜ 最高 {int(e.get('likes_max') or 0):,} 赞"
+        hits = e.get("circle_hits")
+        if isinstance(hits, int):
+            nums += " ｜ 跨圈" if hits == 0 else f" ｜ 圈内 {hits}/{videos}"
+        days = e.get("days")
+        if isinstance(days, int) and days >= 14:
+            nums += " ｜ 常青老梗"
+
+        extra = ""
+        if e.get("usage"):
+            extra += (
+                f'<div style="font-size:13px;color:{TEXT};padding-top:4px;line-height:1.5">'
+                f'{_e(e["usage"])}</div>'
+            )
+        meta = " · ".join(_e(x) for x in (e.get("source"), e.get("bgm")) if x)
+        if meta:
+            extra += f'<div style="font-size:11px;color:{MUTED};padding-top:3px">{meta}</div>'
+        variants = [
+            v for v in dict.fromkeys(e.get("variants") or [])
+            if v and v != e.get("text")
+        ][:3]
+        if variants:
+            extra += (
+                f'<div style="font-size:11px;color:{MUTED};padding-top:3px">'
+                f'变体：{_e("；".join(variants))}</div>'
+            )
+        links = " &nbsp;".join(
+            _link(m["url"], f"看{j}")
+            for j, m in enumerate((e.get("members") or [])[:3], 1)
+            if isinstance(m, dict) and m.get("url")
+        )
+        if links:
+            extra += f'<div style="padding-top:6px">{links}</div>'
+
+        parts.append(
+            f'<div style="padding:12px 0;border-bottom:1px solid {LINE}">'
+            f'<div style="font-size:15px;font-weight:700;line-height:1.5;color:{TEXT}">'
+            f'{i}. 「{_e(e.get("text"))}」</div>'
+            f'<div style="font-size:12px;color:{MUTED};padding-top:3px">{nums}</div>'
+            f"{extra}</div>"
+        )
+
+    if watch:
+        rows = "".join(
+            f'<div style="font-size:13px;color:{TEXT};padding-top:6px;line-height:1.5">'
+            f'「{_e(e.get("text"))}」'
+            f'<span style="color:{MUTED};font-size:12px"> · {int(e.get("videos") or 0)} 条'
+            + (f' · {_e(e.get("usage"))}' if e.get("usage") else "")
+            + "</span></div>"
+            for e in watch
+        )
+        parts.append(
+            f'<div style="padding:12px 0">'
+            f'<div style="font-size:12px;color:{MUTED};padding-bottom:2px">'
+            f"观察中（需要改写或只适合特定画面）</div>{rows}</div>"
+        )
+    return "".join(parts)
+
+
 def _song_table(news: list[dict[str, Any]]) -> str:
     if not news:
         return _empty("今日无你关注主体的新歌")
@@ -393,15 +464,14 @@ def _render(d: Digest) -> str:
                 note="不是追星圈内容，但玩法可以套用；门槛 ≥3 条在用，单日最多 3 条。",
             ),
             _section("取用参考", len(d.refs), _refs_block(d.refs)),
-            _section("今日文案模板", len(d.clusters), _cluster_block(d.clusters)),
-            _section("今日新歌（你关注的主体）", len(d.chart_news), _song_table(d.chart_news)),
-            # 有模型评估就显示「可用文案」，否则退回原始短语清单
             _section(
-                "今日可用文案", len(d.phrase_eval), _phrase_eval_table(d.phrase_eval),
-                note="被多条视频共用、且脱离原语境仍成立；拿来当标题或字幕。"
-                if d.phrase_eval else "",
-            ) if d.phrase_eval else
+                "今日文案",
+                len(d.text_entries),
+                _text_block(d.text_entries),
+                note="「在用」是提到这句话的内容数，「整句」是几乎一字不差照抄的条数。",
+            ) if d.text_entries else
             _section("复用短语（文案梗线索）", len(d.phrases), _phrase_table(d.phrases)),
+            _section("今日新歌（你关注的主体）", len(d.chart_news), _song_table(d.chart_news)),
             _section(
                 "候选素材",
                 len(d.candidates),
@@ -507,44 +577,24 @@ def render_text(d: Digest) -> str:
         lines.append("（今日无）")
     lines.append("")
 
-    lines.append(f"== 今日文案模板（{len(d.clusters)}）==")
-    for i, c in enumerate(d.clusters, 1):
-        lines.append(f"{i}. 「{c.get('rep', '')}」")
-        lines.append(
-            f"   规模 {int(c.get('size') or 0)} 条｜最高 {int(c.get('likes_max') or 0):,} 赞"
-            f"｜中位 {int(c.get('likes_median') or 0):,}"
-        )
-        tags = " ".join(f"#{t}" for t in (c.get("tags") or [])[:5])
-        if tags:
-            lines.append(f"   标签 {tags}")
-    if not d.clusters:
-        lines.append("（今日无）")
-    lines.append("")
-
-    lines.append(f"== 今日新歌（{len(d.chart_news)}）==")
-    for s in d.chart_news:
-        lines.append(f"- {s.get('name')} / {s.get('artist')}（{s.get('chart')} #{int(s.get('rank') or 0)}）")
-    if not d.chart_news:
-        lines.append("（今日无）")
-    lines.append("")
-
-    if d.phrase_eval:
-        lines.append(f"== 今日可用文案（{len(d.phrase_eval)}）==")
-        for p in d.phrase_eval:
-            tag = "可直接用" if p.get("use") == "use" else "需改写"
-            hits = p.get("circle_hits")
+    if d.text_entries:
+        lines.append(f"== 今日文案（{len(d.text_entries)}）==")
+        for i, e in enumerate(d.text_entries, 1):
+            tag = "可直接用" if e.get("use") == "use" else "需改写"
+            nums = f"{int(e.get('videos') or 0)} 条"
+            if e.get("size"):
+                nums += f"（整句 {int(e['size'])}）"
+            hits = e.get("circle_hits")
             src_note = ""
             if isinstance(hits, int):
                 src_note = " · 跨圈" if hits == 0 else f" · 圈内 {hits} 条"
-            days = p.get("first_seen_days")
+            days = e.get("days")
             if isinstance(days, int) and days >= 14:
                 src_note += " · 常青老梗"
-            lines.append(
-                f"- 「{p.get('phrase')}」{int(p.get('videos') or 0)} 条 ({tag}{src_note})"
-            )
-            if p.get("usage"):
-                lines.append(f"   怎么用：{p['usage']}")
-            meta = " · ".join(x for x in (p.get("source"), p.get("bgm")) if x)
+            lines.append(f"{i}. 「{e.get('text')}」{nums} ({tag}{src_note})")
+            if e.get("usage"):
+                lines.append(f"   怎么用：{e['usage']}")
+            meta = " · ".join(x for x in (e.get("source"), e.get("bgm")) if x)
             if meta:
                 lines.append(f"   {meta}")
         lines.append("")
@@ -558,6 +608,13 @@ def render_text(d: Digest) -> str:
         if not d.phrases:
             lines.append("（今日无）")
         lines.append("")
+
+    lines.append(f"== 今日新歌（{len(d.chart_news)}）==")
+    for s in d.chart_news:
+        lines.append(f"- {s.get('name')} / {s.get('artist')}（{s.get('chart')} #{int(s.get('rank') or 0)}）")
+    if not d.chart_news:
+        lines.append("（今日无）")
+    lines.append("")
 
     lines.append(f"== 候选素材（显示 {len(d.candidates)} 条）==")
     for i, c in enumerate(d.candidates, 1):
