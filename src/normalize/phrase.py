@@ -23,7 +23,10 @@ AT_RE = re.compile(r"@[^\s@]{1,20}")
 NON_CJK_RE = re.compile(r"[^\u4e00-\u9fa5]+")
 
 MIN_LEN = 4
-MAX_LEN = 10
+# 10 太短：「愿人生常驻 上上上上上 上升期」这种整句会被切成半截，
+# 合并后的代表词只能是「愿人生常驻上上上上」这种窗口。提到 16 让整句能成为候选；
+# 长串要过 `min_videos` 门槛才会留下，不会引入太多噪声（2026-11-17 实测）。
+MAX_LEN = 16
 DEFAULT_MIN_VIDEOS = 3
 
 # 新鲜度权重：按「使用它的内容年龄中位数」打折。
@@ -134,13 +137,43 @@ def top_phrases(
         if not ignore_works and label != "copy" and looks_like_title(gram, contexts.get(gram, [])):
             continue
         cands.append((gram, count))
-    # 去碎片：被更长短语包含且计数相差 ≤1 的，丢掉短的
-    cands.sort(key=lambda x: (-len(x[0]), -x[1]))
-    kept: list[tuple[str, int]] = []
+    # 去碎片（2026-11-17 改）：n-gram 会把同一句切成互相重叠的窗口，
+    # 例如「愿人生常驻」/「常驻上上上」/「上上上上上上升期」/「愿人生常驻上上上上上」。
+    # 只比「谁包含谁」不够——中段窗口和核心句互不为子串；所以用**传递闭包**：
+    # 任意两条互为子串就连边，连成一片的就是同一句。
+    #
+    # 代表词取组内**最长**的那条（见下），不取计数最高的：
+    # 最短窗口计数天然最高，让它当代表就只剩「上上升期」这种碎片。
+    # 互不为子串、只是很像的，交给模型分组，见 llm/phrases.merge_variants。
+    parent_of: dict[str, str] = {g: g for g, _ in cands}
+
+    def _find(x: str) -> str:
+        while parent_of[x] != x:
+            parent_of[x] = parent_of[parent_of[x]]
+            x = parent_of[x]
+        return x
+
+    grams = [g for g, _ in cands]
+    for i, a in enumerate(grams):
+        for b in grams[i + 1:]:
+            if a in b or b in a:
+                ra, rb = _find(a), _find(b)
+                if ra != rb:
+                    parent_of[ra] = rb
+
+    groups: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for gram, count in cands:
-        if any(gram in longer and count <= lcount + 1 for longer, lcount in kept):
-            continue
-        kept.append((gram, count))
+        groups[_find(gram)].append((gram, count))
+
+    kept: dict[str, int] = {}
+    variants: dict[str, list[str]] = defaultdict(list)
+    # 代表词取组内**最长**的那条：传递闭包里所有成员都是它的子串，
+    # 所以最长的就是「这句话的完整写法」。取计数最高的会挑到「上上升期」这种
+    # 最短窗口（它出现得最多），正是用户抱怨的碎片（2026-11-17 实测）。
+    for members in groups.values():
+        rep = max(members, key=lambda x: (len(x[0]), x[1]))[0]
+        kept[rep] = max(c for _, c in members)
+        variants[rep] = [g for g, _ in members if g != rep]
 
     def _age_stats(gram: str) -> tuple[float | None, float | None, float | None]:
         """(中位年龄, 最老年龄, ≤3 天占比)。没有年龄数据时返回三个 None。"""
@@ -163,11 +196,12 @@ def top_phrases(
         return _STALE_WEIGHT
 
     # 排序：条数 × 新鲜度。老梗即便条数多，也会被新梗挤下去。
-    kept.sort(key=lambda x: -(_fresh_weight(x[0]) * x[1]))
+    ordered = sorted(kept.items(), key=lambda kv: -(_fresh_weight(kv[0]) * kv[1]))
     return [
         {
             "phrase": gram,
             "videos": count,
+            "variants": variants.get(gram, []),
             "likes_max": best_like.get(gram, 0),
             "sample": sample.get(gram, ""),
             "contexts": contexts.get(gram, [])[:3],
@@ -179,5 +213,5 @@ def top_phrases(
             "circle_hits": circle_hits.get(gram, 0),
             "circle_ratio": round(circle_hits.get(gram, 0) / count, 2) if count else 0.0,
         }
-        for gram, count in kept[:limit]
+        for gram, count in ordered[:limit]
     ]

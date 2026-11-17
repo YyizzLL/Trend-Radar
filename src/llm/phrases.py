@@ -64,6 +64,72 @@ def label(
     return out, stats
 
 
+def merge_variants(
+    llm: LLM,
+    phrases: list[dict[str, Any]],
+    *,
+    limit: int = 12,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """把「像、但不是真子集」的写法交给模型判成同一句。
+
+    真子集（「愿人生常驻」完整出现在「愿人生常驻上上上上上」里）由 `top_phrases`
+    的规则直接合并，不进这里；这里只处理「首尾被切开、互相不是子串」的那种，
+    例如「愿人生常驻上上上上上」和「上上上上上上升期」。
+
+    模型只做分组：`keep` 必须是输入里逐字存在的某一条，改过的行整条作废——
+    润色过的句子就不再是用户的原话，宁可多留一行。
+
+    失败 / 不可用时原样返回，不影响出报。
+    """
+    items = [p for p in phrases if str(p.get("phrase") or "").strip()][:limit]
+    stats: dict[str, Any] = {"calls": 0, "input": len(items), "groups": 0, "merged": 0}
+    if len(items) < 2:
+        return list(phrases), stats
+
+    system, user = prompts.phrase_merge_prompt(items)
+    res = llm.json_call(layer="phrase_merge", system=system, user=user)
+    stats["calls"] = 1
+    if not res.ok:
+        stats["failed"] = 1
+        return list(phrases), stats
+
+    known = {str(p["phrase"]): p for p in items}
+    drop: set[str] = set()
+    data = res.data if isinstance(res.data, dict) else {}
+    for row in data.get("groups") or []:
+        if not isinstance(row, dict):
+            continue
+        keep = str(row.get("keep") or "").strip()
+        if keep not in known or keep in drop:
+            continue
+        members = [
+            m for m in (str(x).strip() for x in (row.get("merge") or []))
+            if m in known and m != keep
+        ]
+        if not members:
+            continue
+        rec = known[keep]
+        merged: list[str] = list(rec.get("variants") or [])
+        for m in members:
+            if m in drop:
+                continue
+            merged.append(m)
+            merged.extend(known[m].get("variants") or [])
+            # 证据取并集的上界：短的都是长的那条的切法，计数本来就是它的子集
+            rec["videos"] = max(int(rec.get("videos") or 0), int(known[m].get("videos") or 0))
+            rec["likes_max"] = max(
+                float(rec.get("likes_max") or 0), float(known[m].get("likes_max") or 0)
+            )
+            drop.add(m)
+            stats["merged"] += 1
+        rec["variants"] = list(dict.fromkeys(x for x in merged if x))
+        stats["groups"] += 1
+
+    if drop:
+        log.info("短语归并：%d 组，并入 %d 条", stats["groups"], stats["merged"])
+    return [p for p in phrases if str(p["phrase"]) not in drop], stats
+
+
 def evaluate(
     llm: LLM,
     phrases: list[dict[str, Any]],
@@ -126,6 +192,8 @@ def evaluate(
                 "first_seen_days": src.get("first_seen_days"),
                 # 归一化后的代表词：同一句的不同切法共享年龄
                 "canonical": src.get("canonical"),
+                # 被并进来的其他写法（规则 + 模型两层的合并结果）
+                "variants": src.get("variants") or [],
                 # 圈层来源：circle_hits/videos，0 表示纯跨圈
                 "circle_hits": src.get("circle_hits"),
                 "circle_ratio": src.get("circle_ratio"),

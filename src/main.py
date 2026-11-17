@@ -697,6 +697,13 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         **phrase_args,
     )
 
+    # 规则只能合掉「真子集」（短串完整出现在长串里）。首尾被切开、互不为子串的
+    # （「愿人生常驻上上上上上」vs「上上上上上上升期」）交给模型分组。
+    # 模型只做分组：代表词必须逐字来自输入，改过的行整条作废。
+    merge_stats: dict = {}
+    if phrases and llm.available and (llm_layers.get("phrase") or {}).get("enabled"):
+        phrases, merge_stats = llm_phrases.merge_variants(llm, phrases)
+
     # 短语的跨天追踪：先归一化，再读年龄，最后登记。
     # 顺序不能反 —— observe 会把新词的 first_seen 设成今天，先登记就读不到年龄了。
     # 为什么需要归一化：短语是 n-gram 切的，「你就这样闯进我」和「就这样闯进我的心窝」
