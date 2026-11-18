@@ -18,8 +18,9 @@ __pycache__/
 
 # ---- 词库 ----
 # 词库随仓库提供（138 个主体），用户按需增删 —— 它同时是「这个工具只做这个方向」的边界
-# 只忽略本地备份（build_keywords.py 重写前手动留的 .bak）
-CoreAssets/keywords.bak.json
+# 忽略所有备份（keywords.bak.json / keywords-20261109.json…），但主文件必须入库
+CoreAssets/keywords*.json
+!CoreAssets/keywords.json
 
 # ---- 运行时数据：真实采集、状态、每日产出 ----
 memory/
