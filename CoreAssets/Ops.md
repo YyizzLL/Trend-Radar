@@ -117,7 +117,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `threshold` | `min_likes` / `max_age_days` / `percentile` |
 | `sources.qq_music` | 榜单 id 列表、`max_rank`、`qps_ms`（换榜间隔，代码真的会读） |
 | `sources.bgm_sampler` | 采样开关、预算、每素材条数、缓存 TTL、推断比例 |
-| `judge` | `max_hotspots` / `max_cross` / `per_anchor_cap`（按**主体**计） / `recent_days` / `phrase_min_videos` / `ambiguous_anchors` / `repeat_window_days` / `max_repeat_cards` / `repeat_growth_min` |
+| `judge` | `max_hotspots` / `max_cross` / `per_anchor_cap`（按**主体**计） / `recent_days` / `phrase_min_videos` / `ambiguous_anchors` / `repeat_window_days` / `max_repeat_cards` / `repeat_growth_min` / **`lifespan_days`（按类型的寿命）/ `chart_lifespan_days`（榜龄）/ `chart_rank_cap`** |
 | `automation` | `daily_time` / `boot_delay_seconds` / `retry_time`（`install_task.py` 生成触发器时读）／`edge_headless`／各步骤超时；`collect_timeout_min` 是**整个采集阶段的预算**，另有 `collect_retries` / `collect_retry_wait_s`；`stale_running_min`（僵尸锁阈值）/ `max_attempts`（单日最多尝试次数）/ `verify_retries` + `verify_retry_wait_s`（验证码自动换会话）/ `silent_timeout_min`（静默超时） |
 | `delivery.email` | `enabled`（false 等同 `--no-email`）、SMTP 服务器、附件开关、邮件内各区块条数上限 |
 | `cleanup` | 分层清理：`heavy_days` / `log_days` / `diag_days` / `diag_max` / `max_days` |

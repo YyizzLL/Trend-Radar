@@ -26,15 +26,20 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 def load_recent_hot(
     base: Path,
     today: str,
-    days: int = 4,
+    days: int = 8,
 ) -> dict[str, dict]:
     """读取最近几天归档里「热点」卡的复用信息。
 
-    返回 `{归一化名称: {"streak": 连续天数, "last_mentions": 上次提到数,
-                        "last_rank": 上次榜单排名, "last_date": 最近出现的日期}}`
+    返回 `{归一化名称: {"streak", "last_mentions", "last_rank", "last_date",
+                        "first_seen", "days_seen", "peak_mentions"}}`
 
     `streak` 从**昨天**往前连续计数：昨天有、前天有 → 2；今天再出现就是「连续第 3 天」。
     只看 `< today` 的归档，避免把今天早上那版算进历史（重跑时会重复计数）。
+
+    `first_seen` / `days_seen` / `peak_mentions` 是 2026-11-18 加的，给「寿命」用：
+    - 寿命按**首次出现日期**算，断一天不清零（原来的 `streak` 一断就归零，
+      `CallMyName挑战` 首见 12 天前、中间断一天，就又被当成新卡放回日报）
+    - `peak_mentions` 用来判断「是不是腰斩」，只看相邻两天不够
     """
     if not base.exists():
         return {}
@@ -69,20 +74,28 @@ def load_recent_hot(
     if not daily:
         return {}
 
-    latest_date = history[0].name
-    latest = daily.get(latest_date, {})
+    # 按日期从旧到新累积：首见、出现天数、峰值
     out: dict[str, dict] = {}
-    for key, mat in latest.items():
+    for d in sorted(daily, key=lambda x: x):
+        for key, mat in daily[d].items():
+            rec = out.setdefault(
+                key,
+                {"first_seen": d, "days_seen": 0, "peak_mentions": 0},
+            )
+            rec["days_seen"] += 1
+            rec["peak_mentions"] = max(rec["peak_mentions"], int(mat.get("mentions") or 0))
+            rec["last_date"] = d
+            rec["last_mentions"] = int(mat.get("mentions") or 0)
+            rec["last_rank"] = int(mat.get("chart_rank") or 0)
+
+    # streak 仍然只数「从最近一天往前连续」，用于「连续第 N 天」的展示与让位判断
+    for key, rec in out.items():
         streak = 0
         for d in history:
             if key in daily.get(d.name, {}):
                 streak += 1
             else:
                 break
-        out[key] = {
-            "streak": streak,
-            "last_mentions": int(mat.get("mentions") or 0),
-            "last_rank": int(mat.get("chart_rank") or 0),
-            "last_date": latest_date,
-        }
+        rec["streak"] = streak
+
     return out

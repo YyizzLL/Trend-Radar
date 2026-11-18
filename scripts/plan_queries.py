@@ -36,6 +36,7 @@ from src.config import (  # noqa: E402
 from src.constants import TYPE_QUERY  # noqa: E402
 from src.judge.anchor import context as anchor_context  # noqa: E402
 from src.judge.anchor import match_subject  # noqa: E402
+from src.judge.material import is_activity_container  # noqa: E402
 
 OUT = ROOT / "data" / "input" / "query_plan.json"
 # 验证时用 --seeds 指向 sandbox 的种子文件，不碰 data/input 的真实数据
@@ -91,12 +92,16 @@ def _previous_challenges(limit: int) -> list[dict]:
     if not run or not (run / "materials.json").exists():
         return []
     materials = json.loads((run / "materials.json").read_text(encoding="utf-8"))
-    rows = [m for m in materials if m["mtype"] in {"挑战", "模板"}]
+    # 活动合集不是玩法，别拿它当检索词（2026-11-18）
+    rows = [
+        m for m in materials
+        if m["mtype"] in {"挑战", "模板"} and not is_activity_container(m["name"])
+    ]
     rows.sort(key=lambda m: (-int(m.get("mentions") or 0), m["name"]))
     return [
         {
             "q": m["name"], "type": "挑战",
-            "reason": f"上轮 {m.get('mentions', 0)} 条在用",
+            "reason": f"复检：上轮 {m.get('mentions', 0)} 条在用",
             "priority": 0.9 if m.get("cls") == "热点" else 0.6,
         }
         for m in rows[:limit]
@@ -128,6 +133,8 @@ def _hot_challenges(limit: int) -> list[dict]:
         title = (cand.term or "").strip()
         if not title.endswith("挑战") or not 4 <= len(title) <= 20:
             continue
+        if is_activity_container(title):
+            continue                # 「潮流玩法挑战」这类活动合集，搜回来也只是一堆标签
         out.append({
             "q": title, "type": "挑战",
             "reason": f"热榜 #{cand.rank or '-'}",
@@ -139,12 +146,21 @@ def _hot_challenges(limit: int) -> list[dict]:
 
 
 def _challenge_queries(limit: int) -> list[dict]:
-    """热榜先占一半，剩下的用上轮结果补齐（避免全是新词、也避免全是旧词）。"""
-    hot_n = max(1, limit // 2) if limit else 0
-    hot = _hot_challenges(hot_n)
+    """热榜优先，上轮结果只留 2 个「复检位」。
+
+    2026-11-18：原来是「热榜一半、上轮一半」，等于每天有一半查询在重复昨天，
+    配合判定层的复用额度，形成「今天搜昨天、昨天搜前天」的自我强化。
+    改成：热榜/新词先占满，上轮只留 2 个确认「还活着没有」。
+    """
+    if limit <= 0:
+        return []
+    prev_n = 2 if limit > 2 else 0
+    hot = _hot_challenges(limit)
     taken = {q["q"] for q in hot}
-    prev = [q for q in _previous_challenges(limit) if q["q"] not in taken]
-    return (hot + prev)[:limit]
+    prev = [q for q in _previous_challenges(limit * 2) if q["q"] not in taken]
+    # 热榜不够就少排几个，缺口交给「热种」（外部新词），不再用上轮填满——
+    # 用上轮补齐等于把刚立起来的复检上限又抹掉（2026-11-18 实测：热榜 0 条时变成 10 个复检）
+    return (hot + prev[:prev_n])[:limit]
 
 
 def _rotate(pool: list[str], day: int, n: int) -> list[str]:
@@ -316,15 +332,20 @@ def main() -> int:
     quotas = cfg.get("quota") or {"歌名": 15, "挑战": 10, "主体": 10, "发现": 5}
 
     kw = load_keywords()
+    # 挑战位排不满（热榜没有新词）时，把缺口让给「热种」——外部输入比上轮结果值钱
+    challenges = _challenge_queries(int(quotas.get("挑战", 10)))
+    seed_quota = int(quotas.get("热种", 8)) + max(
+        0, int(quotas.get("挑战", 10)) - len(challenges)
+    )
     batches = [
         _chart_queries(kw, int(quotas.get("歌名", 15))),
-        _challenge_queries(int(quotas.get("挑战", 10))),
+        challenges,
         _subject_queries(kw, int(quotas.get("主体", 10))),
     ]
     used = {item["q"].lower() for batch in batches for item in batch}
     batches.append(_discovery_queries(used, int(quotas.get("发现", 5))))
     used |= {item["q"].lower() for item in batches[-1]}
-    batches.append(_hot_seed_queries(used, int(quotas.get("热种", 8))))
+    batches.append(_hot_seed_queries(used, seed_quota))
 
     # 交错：歌名 / 挑战 / 主体 / 发现 / 热种 轮流上，避免「前面把额度用完、只剩一类」
     queries = _interleave(batches, max_queries)

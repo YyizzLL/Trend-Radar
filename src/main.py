@@ -518,11 +518,14 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     # 同一玩法的不同写法（霸王龙舞步挑战 / 霸王龙舞步转场挑战）也合并，否则证据被拆散
     materials = merge_variants(materials)
 
-    # 跨天复用：只有「连续第 3 天且热度没涨」的卡才让位，其余按额度限制
+    # 跨天复用：连续第 3 天且热度没涨的卡让位；寿命按首次出现日期算（断天不清零）
     recent_hot = load_recent_hot(
         DATA_DIR / "daily",
         today,
-        days=int(judge_cfg.get("repeat_window_days", 4)),
+        days=max(
+            int(judge_cfg.get("repeat_window_days", 4)),
+            int(judge_cfg.get("lifespan_window_days", 10)),
+        ),
     )
     if recent_hot:
         log.info("跨天复用：历史热点 %d 个可比对", len(recent_hot))
@@ -563,9 +566,15 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         max_repeat=int(judge_cfg.get("max_repeat_cards", 3)),
         max_repeat_cross=int(judge_cfg.get("max_repeat_cross", 1)),
         repeat_growth=float(judge_cfg.get("repeat_growth_min", 0.2)),
+        lifespan=judge_cfg.get("lifespan_days") or None,
+        chart_lifespan=judge_cfg.get("chart_lifespan_days") or None,
+        chart_rank_cap=int(judge_cfg.get("chart_rank_cap", 15)),
         llm_verdicts=llm_verdict_map or None,
     )
     lifecycle.save()
+    # 卡片寿命台账：给「一周后按真实分布校准阈值」用（首见 / 出现天数 / 峰值）
+    if recent_hot:
+        write_json(run_dir / "card_lifespan.json", recent_hot)
 
     hot = sorted([m for m in materials if m.cls == "热点"], key=lambda m: m.order)
     log.info(

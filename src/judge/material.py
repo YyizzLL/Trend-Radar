@@ -11,6 +11,9 @@ BGM 另有一条特殊规则：来自音乐榜单、且歌手是你关注的主�
 
 from __future__ import annotations
 
+import re
+from datetime import date
+
 from ..models import Material
 from ..normalize.term import normalize as _norm
 from ..store.lifecycle import Lifecycle
@@ -18,6 +21,34 @@ from .domain import DOMAIN_NOISE, HARD_NOISE_GROUPS, hit, hits as _hits
 
 CIRCLE_IN = "圈内"
 CIRCLE_OUT = "跨圈"
+
+# 活动合集 / 赛事名：它们是「标签」，不是「玩法」。
+# 2026-11-18 用户反馈：「潮流玩法挑战」是活动名称合集，不代表某个独立玩法。
+# 判据要狠：宁肯少判一个容器，也不要把「12378舞蹈挑战」这种真玩法挡掉。
+_CONTAINER_RE = re.compile(
+    r"挑战赛|大赏|榜单|市集|盛典|嘉年华|季$|赛$|榜.{0,6}挑战|玩法挑战|全民.{0,6}挑战"
+)
+
+
+def is_activity_container(name: str) -> bool:
+    return bool(_CONTAINER_RE.search((name or "").strip()))
+
+
+def _lifespan_cap(
+    mat: Material,
+    lifespan: dict[str, int] | None,
+    chart_lifespan: dict[str, int] | None,
+) -> tuple[int, str]:
+    """这张卡最多能出现几天（含今天）。0 = 不限制。返回 (天数, 口径名)。"""
+    chart = mat.chart or ""
+    if mat.from_chart and chart_lifespan:
+        for key, days in chart_lifespan.items():
+            if key and key in chart and int(days or 0) > 0:
+                return int(days), f"榜龄（{key}）"
+        return 0, ""
+    if lifespan:
+        return int(lifespan.get(mat.mtype) or 0), f"{mat.mtype}寿命"
+    return 0, ""
 
 # 「零使用也输出」只适用于真正的新歌榜 / 飙升榜；
 # 热歌榜是存量热度，一首 2003 年的老歌不该按「新歌」进日报。
@@ -99,6 +130,9 @@ def judge_materials(
     max_repeat: int = 3,
     max_repeat_cross: int = 1,
     repeat_growth: float = 0.2,
+    lifespan: dict[str, int] | None = None,
+    chart_lifespan: dict[str, int] | None = None,
+    chart_rank_cap: int = 15,
     llm_verdicts: dict[str, str] | None = None,
 ) -> list[Material]:
     """`llm_verdicts` 是模型复核结果（键见 `_key`）：只有 keep / drop 两种。
@@ -132,6 +166,29 @@ def judge_materials(
             mat.llm_verdict = "keep"
 
         mat.circle = mat.circle or CIRCLE_OUT
+
+        # 活动合集不是玩法：只有一堆视频挂着同一个标签，抽不出可复制的动作
+        if mat.mtype in {"挑战", "模板"} and is_activity_container(mat.name):
+            mat.cls = "候选"
+            mat.reason = "活动合集/赛事名，不是可复制的玩法（只能当查询种子）"
+            continue
+
+        # 寿命：按**首次出现日期**算，断一天不清零（11-18 用户反馈反复出现的卡）
+        info = (recent_hot or {}).get(_norm(mat.name)) or {}
+        first_date = str(info.get("first_seen") or "")
+        seen_days = 0
+        if first_date:
+            try:
+                seen_days = (date.fromisoformat(today) - date.fromisoformat(first_date)).days + 1
+            except ValueError:
+                seen_days = 0
+        cap, cap_label = _lifespan_cap(mat, lifespan, chart_lifespan)
+        if cap and seen_days > cap:
+            mat.cls = "候选"
+            mat.repeat = True
+            mat.reason = f"已出现 {seen_days} 天，超过{cap_label} {cap} 天，让位给新素材"
+            continue
+
         age = lifecycle.age_days(mat.name, today) if lifecycle else None
         fresh = age is not None and age <= recent_days
         age_text = f"，首见{age}天前" if age is not None else ""
@@ -143,6 +200,7 @@ def judge_materials(
             and mat.from_chart
             and mat.circle == CIRCLE_IN
             and _chart_is_new(mat)
+            and 0 < int(mat.chart_rank or 999) <= chart_rank_cap
         ):
             used = (
                 f"；抖音 {mat.mentions} 条内容提到该歌名"
@@ -193,12 +251,14 @@ def judge_materials(
         )
 
         # ---- 跨天复用：连续第 3 天且热度没涨，就让它让位 ----
-        info = (recent_hot or {}).get(_norm(mat.name))
         if mat.cls == "热点" and info:
             streak = int(info.get("streak") or 0)
             last_mentions = int(info.get("last_mentions") or 0)
             last_rank = int(info.get("last_rank") or 0)
+            peak = int(info.get("peak_mentions") or 0)
             growth = (mat.mentions - last_mentions) / max(1, last_mentions)
+            # 腰斩也算衰退：只看相邻两天的 20%，抓不到「慢慢掉一半」的卡
+            halved = peak > 0 and mat.mentions < peak * 0.6
             rank_up = bool(
                 mat.from_chart and last_rank and mat.chart_rank
                 and mat.chart_rank < last_rank
@@ -210,10 +270,11 @@ def judge_materials(
             if mat.from_chart:
                 mat.repeat = True
                 mat.reason = f"{mat.reason}；连续第 {streak + 1} 天（仍在榜）"
-            elif streak >= 2 and growth < repeat_growth:
+            elif streak >= 2 and (growth < repeat_growth or halved):
                 mat.cls = "候选"
+                why = "热度腰斩" if halved else "热度未增长"
                 mat.reason = (
-                    f"连续第 {streak + 1} 天出现，热度未增长"
+                    f"连续第 {streak + 1} 天出现，{why}"
                     f"（{last_mentions} → {mat.mentions} 条），让位给新素材"
                 )
             else:
