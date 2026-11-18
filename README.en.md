@@ -69,8 +69,8 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 
 cp .env.example .env          # then fill in keys, see below
-# Build CoreAssets/keywords.json from CoreAssets/keywords.template.md
-# (it is NOT in the repo - without it the plan is empty and nothing is collected)
+# The keyword library ships with the repo (138 subjects). To add or remove people,
+# edit CoreAssets/keywords.json following CoreAssets/keywords.template.md
 
 python scripts/doctor.py      # deps / timezone / keys / port / keywords / data
 python scripts/launch_edge.py # starts Edge; scan the QR code to log into Douyin
@@ -124,12 +124,12 @@ Using your QQ login password in `SMTP_PASS` fails with `535 Authentication faile
 | Path | Create it? | Notes |
 |------|-----------|-------|
 | `.env` | yes | copy from `.env.example` |
-| `CoreAssets/keywords.json` | **yes** | not in the repo; follow the template |
+| `CoreAssets/keywords.json` | no | **ships with the repo** (138 subjects); add or remove entries following the template |
 | `data/*` | no | created at runtime |
 | `.edge-cdp/` | no | created on first `launch_edge.py` |
 
-The keyword file is the foundation. An empty `subjects` list means an empty plan,
-zero content collected and an empty digest. `python scripts/plan_queries.py`
+The keyword file ships with 138 subjects and is the foundation. An empty `subjects` list
+means an empty plan, zero content collected and an empty digest. `python scripts/plan_queries.py`
 is the fastest way to check it.
 
 ---
@@ -143,6 +143,7 @@ Trend-Radar/
 │   ├── InputOutput.md   data contract
 │   ├── HotspotCriteria.md   the criteria (wins any conflict)
 │   ├── Ops.md           runbook: daily run, troubleshooting, LLM config
+│   ├── keywords.json    ships with the repo (138 subjects), editable
 │   └── keywords.template.md
 │
 ├── config/sources.yaml  sources, thresholds, delivery, LLM switches

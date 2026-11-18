@@ -1,0 +1,1777 @@
+{
+  "锚点层": {
+    "主体": [
+      "时代少年团",
+      "登陆少年",
+      "TF家族三代",
+      "TF家族四代",
+      "十个勤天",
+      "R.E.D组合",
+      "NAME女团",
+      "SNH48",
+      "A2O LITE",
+      "A2O MAY",
+      "A2O SOUL",
+      "南国少年团",
+      "肖战",
+      "王一博",
+      "易烊千玺",
+      "王俊凯",
+      "王源",
+      "蔡徐坤",
+      "张艺兴",
+      "华晨宇",
+      "周深",
+      "单依纯",
+      "刘雨昕",
+      "虞书欣",
+      "鞠婧祎",
+      "aespa",
+      "IVE",
+      "NewJeans",
+      "LE SSERAFIM",
+      "I-DLE",
+      "BABYMONSTER",
+      "NMIXX",
+      "ITZY",
+      "ILLIT",
+      "TWICE",
+      "BLACKPINK",
+      "BTS",
+      "Stray Kids",
+      "SEVENTEEN",
+      "ENHYPEN",
+      "TXT",
+      "RIIZE",
+      "BOYNEXTDOOR",
+      "NCT DREAM",
+      "NCT WISH",
+      "ATEEZ",
+      "TWS",
+      "ZEROBASEONE",
+      "CORTIS",
+      "时代峰峻",
+      "乐华娱乐",
+      "哇唧唧哇",
+      "染色体",
+      "天浩盛世",
+      "A2O",
+      "SM",
+      "YG",
+      "JYP",
+      "HYBE",
+      "ADOR",
+      "PLEDIS",
+      "TFBOYS",
+      "BOYHOOD",
+      "ONER",
+      "SING女团",
+      "GNZ48",
+      "BEJ48",
+      "MODYSSEY",
+      "AND2BLE",
+      "RaceBace",
+      "AM8IC",
+      "RESCENE",
+      "MEOVV",
+      "KATSEYE",
+      "Hearts2Hearts",
+      "FIFTY FIFTY",
+      "薛之谦",
+      "汪苏泷",
+      "毛不易",
+      "希林娜依高",
+      "陈卓璇",
+      "张靓颖",
+      "邓紫棋",
+      "孙燕姿",
+      "刘宇宁",
+      "黄子弘凡",
+      "李宇春",
+      "张碧晨",
+      "五月天",
+      "GAI",
+      "艾热",
+      "法老",
+      "乃万",
+      "杨和苏",
+      "马思唯",
+      "刘聪",
+      "万妮达",
+      "赵露思",
+      "王鹤棣",
+      "白鹿",
+      "杨紫",
+      "迪丽热巴",
+      "成毅",
+      "张凌赫",
+      "田曦薇",
+      "陈哲远",
+      "吴磊",
+      "赵今麦",
+      "刘昊然",
+      "谭松韵",
+      "李现",
+      "宋亚轩",
+      "刘耀文",
+      "丁程鑫",
+      "马嘉祺",
+      "张真源",
+      "严浩翔",
+      "贺峻霖",
+      "D.A.O",
+      "ROS共和少年",
+      "杨幂",
+      "赵丽颖",
+      "刘诗诗",
+      "唐嫣",
+      "关晓彤",
+      "欧阳娜娜",
+      "周杰伦",
+      "刘德华",
+      "张学友",
+      "郭富城",
+      "黎明",
+      "周星驰",
+      "汪峰",
+      "王菲",
+      "陈奕迅",
+      "林俊杰",
+      "罗大佑",
+      "李宗盛"
+    ],
+    "CP": [
+      "博君一肖",
+      "文轩",
+      "翔霖",
+      "祺鑫",
+      "左邓",
+      "橹穆",
+      "豪丞",
+      "熙铭",
+      "桂瑞",
+      "奇文",
+      "七折",
+      "祺源",
+      "文严文",
+      "棣欣引力",
+      "吴露可逃",
+      "昀牵孟绕",
+      "栩你渝生",
+      "皇权富贵",
+      "郝胡",
+      "宇日俱增",
+      "圆周率",
+      "瑜洲",
+      "东纶"
+    ],
+    "歌名": [],
+    "剧名": [],
+    "主体画像": {
+      "时代少年团": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": "时代峰峻"
+      },
+      "登陆少年": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": "时代峰峻"
+      },
+      "TF家族三代": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": "时代峰峻"
+      },
+      "TF家族四代": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": "时代峰峻"
+      },
+      "十个勤天": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "R.E.D组合": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": "染色体"
+      },
+      "NAME女团": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": ""
+      },
+      "SNH48": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": ""
+      },
+      "A2O LITE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": "A2O"
+      },
+      "A2O MAY": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": "A2O"
+      },
+      "A2O SOUL": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "女团",
+        "org": "A2O"
+      },
+      "南国少年团": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "肖战": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "王一博": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "易烊千玺": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "王俊凯": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "王源": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "蔡徐坤": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "张艺兴": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": "染色体"
+      },
+      "华晨宇": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "周深": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "单依纯": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "刘雨昕": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "虞书欣": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "鞠婧祎": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "aespa": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "SM"
+      },
+      "IVE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "STARSHIP"
+      },
+      "NewJeans": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "ADOR"
+      },
+      "LE SSERAFIM": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "HYBE"
+      },
+      "I-DLE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": ""
+      },
+      "BABYMONSTER": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "YG"
+      },
+      "NMIXX": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "JYP"
+      },
+      "ITZY": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "JYP"
+      },
+      "ILLIT": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "HYBE"
+      },
+      "TWICE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "JYP"
+      },
+      "BLACKPINK": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "YG"
+      },
+      "BTS": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "HYBE"
+      },
+      "Stray Kids": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "JYP"
+      },
+      "SEVENTEEN": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "PLEDIS"
+      },
+      "ENHYPEN": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "HYBE"
+      },
+      "TXT": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "HYBE"
+      },
+      "RIIZE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "SM"
+      },
+      "BOYNEXTDOOR": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "HYBE"
+      },
+      "NCT DREAM": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "SM"
+      },
+      "NCT WISH": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "SM"
+      },
+      "ATEEZ": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "KQ"
+      },
+      "TWS": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "PLEDIS"
+      },
+      "ZEROBASEONE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "WAKEONE"
+      },
+      "CORTIS": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "男团",
+        "org": "HYBE"
+      },
+      "时代峰峻": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "乐华娱乐": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "哇唧唧哇": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "染色体": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "天浩盛世": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "A2O": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "内娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "SM": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "YG": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "JYP": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "HYBE": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "ADOR": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "PLEDIS": {
+        "tier": "S",
+        "weight": 1.0,
+        "region": "韩娱",
+        "type": "厂牌",
+        "org": ""
+      },
+      "TFBOYS": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": "时代峰峻"
+      },
+      "BOYHOOD": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "ONER": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "SING女团": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "女团",
+        "org": ""
+      },
+      "GNZ48": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "女团",
+        "org": ""
+      },
+      "BEJ48": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "女团",
+        "org": ""
+      },
+      "MODYSSEY": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "AND2BLE": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": "乐华娱乐"
+      },
+      "RaceBace": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "AM8IC": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "RESCENE": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "韩娱",
+        "type": "女团",
+        "org": ""
+      },
+      "MEOVV": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "韩娱",
+        "type": "女团",
+        "org": ""
+      },
+      "KATSEYE": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "HYBE"
+      },
+      "Hearts2Hearts": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "韩娱",
+        "type": "女团",
+        "org": "SM"
+      },
+      "FIFTY FIFTY": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "韩娱",
+        "type": "女团",
+        "org": ""
+      },
+      "薛之谦": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "汪苏泷": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "毛不易": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "希林娜依高": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "陈卓璇": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "张靓颖": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "邓紫棋": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "孙燕姿": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "刘宇宁": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "黄子弘凡": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "李宇春": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "张碧晨": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "solo",
+        "org": ""
+      },
+      "五月天": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "华语",
+        "type": "乐队",
+        "org": ""
+      },
+      "GAI": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "艾热": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "法老": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "乃万": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "杨和苏": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "马思唯": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "刘聪": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "万妮达": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "rapper",
+        "org": ""
+      },
+      "赵露思": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "王鹤棣": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "白鹿": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "杨紫": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "迪丽热巴": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "成毅": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "张凌赫": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "田曦薇": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "陈哲远": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "吴磊": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "赵今麦": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "刘昊然": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "谭松韵": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "李现": {
+        "tier": "A",
+        "weight": 0.6,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "宋亚轩": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "刘耀文": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "丁程鑫": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "马嘉祺": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "张真源": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "严浩翔": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "贺峻霖": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "solo",
+        "org": "时代少年团"
+      },
+      "D.A.O": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "ROS共和少年": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "男团",
+        "org": ""
+      },
+      "杨幂": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "赵丽颖": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "刘诗诗": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "唐嫣": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "关晓彤": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "欧阳娜娜": {
+        "tier": "B",
+        "weight": 0.3,
+        "region": "内娱",
+        "type": "演员",
+        "org": ""
+      },
+      "周杰伦": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "刘德华": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "张学友": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "郭富城": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "黎明": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "周星驰": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "演员",
+        "org": ""
+      },
+      "汪峰": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "王菲": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "陈奕迅": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "林俊杰": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "罗大佑": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      },
+      "李宗盛": {
+        "tier": "C",
+        "weight": 0.1,
+        "region": "华语",
+        "type": "solo",
+        "org": ""
+      }
+    },
+    "成员归属": {
+      "时代少年团": [
+        "马嘉祺",
+        "丁程鑫",
+        "宋亚轩",
+        "刘耀文",
+        "张真源",
+        "严浩翔",
+        "贺峻霖"
+      ],
+      "登陆少年": [
+        "朱志鑫",
+        "张泽禹",
+        "张极",
+        "左航",
+        "苏新皓"
+      ],
+      "TF家族三代": [
+        "张峻豪",
+        "余宇涵",
+        "穆祉丞",
+        "邓佳鑫",
+        "童禹坤"
+      ],
+      "TF家族四代": [
+        "张桂源",
+        "杨博文",
+        "左奇函",
+        "张函瑞",
+        "陈浚铭",
+        "王橹杰"
+      ],
+      "十个勤天": [
+        "蒋敦豪",
+        "鹭卓",
+        "李耕耘",
+        "李昊",
+        "赵一博",
+        "卓沅",
+        "赵小童",
+        "何浩铭",
+        "陈少熙",
+        "王一珩"
+      ],
+      "R.E.D组合": [
+        "周洛汐",
+        "李芊语",
+        "刘婷秀",
+        "彭湘蕊",
+        "李雨林",
+        "胡静怡",
+        "尹子璐"
+      ],
+      "aespa": [
+        "Karina",
+        "Giselle",
+        "Winter",
+        "Ningning"
+      ],
+      "IVE": [
+        "安宥真",
+        "Gaeul",
+        "Rei",
+        "张元英",
+        "Liz",
+        "李瑞"
+      ],
+      "NewJeans": [
+        "Minji",
+        "Hanni",
+        "Danielle",
+        "Haerin",
+        "Hyein"
+      ],
+      "LE SSERAFIM": [
+        "金采源",
+        "宫脇咲良",
+        "许允真",
+        "Kazuha",
+        "洪恩采"
+      ],
+      "I-DLE": [
+        "美延",
+        "Minnie",
+        "小娟",
+        "雨琦",
+        "舒华"
+      ],
+      "BABYMONSTER": [
+        "Ruka",
+        "Pharita",
+        "Asa",
+        "Ahyeon",
+        "Rami",
+        "Rora",
+        "Chiquita"
+      ],
+      "ILLIT": [
+        "Yunah",
+        "Minju",
+        "Moka",
+        "Wonhee",
+        "Iroha"
+      ],
+      "RIIZE": [
+        "Shotaro",
+        "Eunseok",
+        "Sungchan",
+        "Wonbin",
+        "Seunghan",
+        "Sohee"
+      ],
+      "BOYNEXTDOOR": [
+        "Sungho",
+        "Riwoo",
+        "Jaehyun",
+        "Taesan",
+        "Leehan",
+        "Woonhak"
+      ],
+      "TWS": [
+        "Shinyu",
+        "Dohoon",
+        "Youngjae",
+        "Hanjin",
+        "Jihoon",
+        "Kyungmin"
+      ],
+      "ENHYPEN": [
+        "Jungwon",
+        "Heeseung",
+        "Jay",
+        "Jake",
+        "Sunghoon",
+        "Sunoo",
+        "Ni-ki"
+      ],
+      "TXT": [
+        "Yeonjun",
+        "Soobin",
+        "Beomgyu",
+        "Taehyun",
+        "Huening Kai"
+      ],
+      "BTS": [
+        "RM",
+        "Jin",
+        "SUGA",
+        "j-hope",
+        "Jimin",
+        "Jungkook"
+      ],
+      "Stray Kids": [
+        "Bang Chan",
+        "Lee Know",
+        "Changbin",
+        "Hyunjin",
+        "Han",
+        "Felix",
+        "Seungmin",
+        "I.N"
+      ],
+      "SEVENTEEN": [
+        "S.Coups",
+        "Jeonghan",
+        "Joshua",
+        "Jun",
+        "Hoshi",
+        "Wonwoo",
+        "Woozi",
+        "DK",
+        "Mingyu",
+        "The8",
+        "Seungkwan",
+        "Vernon",
+        "Dino"
+      ],
+      "NCT DREAM": [
+        "Mark",
+        "Renjun",
+        "Jeno",
+        "Haechan",
+        "Jaemin",
+        "Chenle",
+        "Jisung"
+      ],
+      "ITZY": [
+        "Yeji",
+        "Lia",
+        "Ryujin",
+        "Chaeryeong",
+        "Yuna"
+      ],
+      "NMIXX": [
+        "Lily",
+        "Haewon",
+        "Sullyoon",
+        "Bae",
+        "Jiwoo",
+        "Kyujin"
+      ],
+      "TWICE": [
+        "Nayeon",
+        "Jeongyeon",
+        "Momo",
+        "Sana",
+        "Jihyo",
+        "Mina",
+        "Dahyun",
+        "Chaeyoung",
+        "Tzuyu"
+      ],
+      "BLACKPINK": [
+        "Jisoo",
+        "Jennie",
+        "Rosé",
+        "Lisa"
+      ],
+      "ZEROBASEONE": [
+        "章昊",
+        "成韩彬",
+        "石马修",
+        "Ricky",
+        "朴乾煜",
+        "金泰来",
+        "金奎彬",
+        "金志雄",
+        "韩维辰"
+      ]
+    },
+    "厂牌": {
+      "时代峰峻": {
+        "tier": "S",
+        "artists": [
+          "TFBOYS",
+          "时代少年团",
+          "登陆少年",
+          "TF家族三代",
+          "TF家族四代"
+        ]
+      },
+      "乐华娱乐": {
+        "tier": "S",
+        "artists": [
+          "AND2BLE"
+        ]
+      },
+      "哇唧唧哇": {
+        "tier": "S",
+        "artists": []
+      },
+      "染色体": {
+        "tier": "S",
+        "artists": [
+          "R.E.D组合",
+          "张艺兴"
+        ]
+      },
+      "A2O": {
+        "tier": "S",
+        "artists": [
+          "A2O LITE",
+          "A2O MAY",
+          "A2O SOUL"
+        ]
+      },
+      "SM": {
+        "tier": "S",
+        "artists": [
+          "aespa",
+          "RIIZE",
+          "NCT DREAM",
+          "NCT WISH",
+          "Hearts2Hearts"
+        ]
+      },
+      "YG": {
+        "tier": "S",
+        "artists": [
+          "BABYMONSTER",
+          "BLACKPINK"
+        ]
+      },
+      "JYP": {
+        "tier": "S",
+        "artists": [
+          "NMIXX",
+          "ITZY",
+          "TWICE",
+          "Stray Kids"
+        ]
+      },
+      "HYBE": {
+        "tier": "S",
+        "artists": [
+          "BTS",
+          "SEVENTEEN",
+          "ENHYPEN",
+          "TXT",
+          "BOYNEXTDOOR",
+          "LE SSERAFIM",
+          "ILLIT",
+          "KATSEYE",
+          "CORTIS"
+        ]
+      },
+      "ADOR": {
+        "tier": "S",
+        "artists": [
+          "NewJeans"
+        ]
+      },
+      "PLEDIS": {
+        "tier": "S",
+        "artists": [
+          "SEVENTEEN",
+          "TWS"
+        ]
+      }
+    }
+  },
+  "时效层": {
+    "热点信号词": [
+      "挑战",
+      "新歌",
+      "回归",
+      "官宣",
+      "定档",
+      "上线",
+      "爆火",
+      "翻红",
+      "首发",
+      "进行曲",
+      "大赏",
+      "一键剪同款",
+      "剪同款",
+      "拍同款",
+      "跟拍",
+      "申请出战",
+      "挑战赛",
+      "新剧",
+      "开播",
+      "首播"
+    ]
+  },
+  "形式层": {
+    "创作类型词": [
+      "混剪",
+      "转场",
+      "卡点",
+      "一键换装",
+      "镜面放大舞台",
+      "踩点",
+      "慢速",
+      "直拍",
+      "饭制",
+      "生贺",
+      "应援",
+      "手书",
+      "MAD",
+      "AMV",
+      "同人",
+      "色链",
+      "歌词排版",
+      "空镜",
+      "返场",
+      "focus",
+      "修图",
+      "二创",
+      "氛围感",
+      "破碎感",
+      "变装",
+      "仿妆"
+    ],
+    "场景词": [
+      "打歌舞台",
+      "签售",
+      "演唱会",
+      "音乐节",
+      "见面会",
+      "生日会",
+      "出道",
+      "路演",
+      "巡演",
+      "首映"
+    ]
+  },
+  "模式层": {
+    "模板骨架": [
+      "{X}摇",
+      "{X}手势舞",
+      "{X}变装",
+      "{X}换装",
+      "{X}转场",
+      "{X}转场挑战",
+      "{X}挑战",
+      "{X}特效",
+      "{X}滤镜",
+      "{X}仿妆",
+      "{X}卡点",
+      "{X}合拍",
+      "{X}进行曲",
+      "{X}大赏"
+    ],
+    "骨架校验词": [
+      "教程",
+      "模板",
+      "一键剪同款",
+      "剪同款",
+      "拍同款",
+      "跟拍",
+      "合集",
+      "挑战赛"
+    ],
+    "自带校验骨架": [
+      "变装",
+      "换装",
+      "转场",
+      "转场挑战",
+      "手势舞",
+      "仿妆",
+      "卡点"
+    ],
+    "已知实例": {
+      "抽屉式变装": "2025-10",
+      "粒子消散变装": "2025-08",
+      "香蜜古风变装转场": "2025-11",
+      "后备箱转场挑战": "2025-07",
+      "慢动作卡点转手挑战": "2025-09",
+      "KG摇": "2025-09",
+      "鸽子摇": "2025-09",
+      "海芯摇": "2025-07",
+      "踢腿摇": "2025-07",
+      "红苹果手势舞": "2025-09"
+    }
+  },
+  "领域种子词": [
+    "女团",
+    "男团",
+    "KPOP",
+    "内娱",
+    "打歌舞台",
+    "饭制",
+    "二创",
+    "直拍"
+  ],
+  "别名映射": {
+    "R.E.D组合": [
+      "RED组合",
+      "red组合",
+      "R.E.D",
+      "小红包"
+    ],
+    "时代峰峻": [
+      "sdfj",
+      "十八楼",
+      "TF家族"
+    ],
+    "时代少年团": [
+      "TNT",
+      "时团",
+      "十八楼",
+      "时代少年"
+    ],
+    "登陆少年": [
+      "TOP登陆少年",
+      "登陆少年组合",
+      "T.O.P"
+    ],
+    "染色体": [
+      "染色体娱乐"
+    ],
+    "TFBOYS": [
+      "加油男孩"
+    ],
+    "A2O LITE": [
+      "A2OLITE",
+      "A2O"
+    ],
+    "aespa": [
+      "艾斯帕"
+    ],
+    "NewJeans": [
+      "NJZ",
+      "鲸"
+    ],
+    "LE SSERAFIM": [
+      "LESSERAFIM",
+      "炽"
+    ],
+    "I-DLE": [
+      "(G)I-DLE",
+      "GIDLE",
+      "女娃",
+      "孩子们"
+    ],
+    "BABYMONSTER": [
+      "宝怪",
+      "BM"
+    ],
+    "BLACKPINK": [
+      "BP",
+      "粉墨"
+    ],
+    "BTS": [
+      "防弹少年团",
+      "防弹"
+    ],
+    "Stray Kids": [
+      "SKZ",
+      "迷"
+    ],
+    "SEVENTEEN": [
+      "SVT",
+      "小十七",
+      "十七"
+    ],
+    "王一博": [
+      "一博",
+      "耶啵"
+    ],
+    "易烊千玺": [
+      "千玺",
+      "四字"
+    ],
+    "王俊凯": [
+      "小凯"
+    ],
+    "王源": [
+      "源源"
+    ],
+    "TF家族三代": [
+      "TF_ING",
+      "三代"
+    ],
+    "TF家族四代": [
+      "四代"
+    ],
+    "NAME女团": [
+      "NAME"
+    ],
+    "SNH48": [
+      "SNH",
+      "塞纳河"
+    ],
+    "A2O MAY": [
+      "A2OMAY"
+    ],
+    "A2O SOUL": [
+      "A2OSOUL"
+    ],
+    "乐华娱乐": [
+      "乐华",
+      "YH"
+    ],
+    "哇唧唧哇": [
+      "哇唧"
+    ],
+    "ENHYPEN": [
+      "符"
+    ],
+    "TXT": [
+      "TOMORROW X TOGETHER",
+      "档"
+    ],
+    "BOYNEXTDOOR": [
+      "门童",
+      "BND"
+    ],
+    "NCT DREAM": [
+      "梦队",
+      "NCTdream"
+    ],
+    "ZEROBASEONE": [
+      "ZB1",
+      "零基一"
+    ],
+    "IVE": [
+      "芙"
+    ],
+    "ILLIT": [
+      "礼"
+    ],
+    "肖战": [
+      "小站",
+      "战战"
+    ],
+    "蔡徐坤": [
+      "坤坤",
+      "IKUN"
+    ],
+    "张艺兴": [
+      "LAY",
+      "艺兴"
+    ],
+    "周深": [
+      "深深"
+    ],
+    "单依纯": [
+      "依依"
+    ],
+    "刘宇宁": [
+      "宁哥"
+    ],
+    "虞书欣": [
+      "欣欣"
+    ],
+    "鞠婧祎": [
+      "小鞠"
+    ],
+    "薛之谦": [
+      "谦谦"
+    ],
+    "邓紫棋": [
+      "GEM"
+    ],
+    "孙燕姿": [
+      "燕姿"
+    ],
+    "GAI": [
+      "周延"
+    ],
+    "黄子弘凡": [
+      "黄子"
+    ],
+    "十个勤天": [
+      "种地吧",
+      "十个晴天"
+    ]
+  },
+  "噪声黑名单": [
+    "减肥",
+    "燃脂舞",
+    "健身",
+    "京剧",
+    "篮球",
+    "高考",
+    "考研"
+  ]
+}

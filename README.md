@@ -68,7 +68,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 
 cp .env.example .env          # 再填 key，见下一节
-# 照着 CoreAssets/keywords.template.md 建 CoreAssets/keywords.json（仓库里没有这份，必须自己填）
+# 词库随仓库提供（138 个主体）。想加人/删人，照着 CoreAssets/keywords.template.md 改 keywords.json
 
 python scripts/doctor.py      # 自检：依赖 / 时区 / 密钥 / 端口 / 词库 / 数据
 python scripts/launch_edge.py # 启动 Edge，然后在窗口里扫码登录抖音
@@ -122,7 +122,7 @@ python scripts/install_task.py        # --query 看状态 / --remove 删除 / --
 | 路径 | 要不要自己建 | 说明 |
 |---|---|---|
 | `.env` | 是 | 从 `.env.example` 复制 |
-| `CoreAssets/keywords.json` | **是** | 词库不在仓库里，按 [模板](CoreAssets/keywords.template.md) 自己填 |
+| `CoreAssets/keywords.json` | 否 | **已随仓库提供**（138 个主体）；按 [模板](CoreAssets/keywords.template.md) 增删即可 |
 | `data/` 下的三个子目录 | 否 | 运行时自动创建 |
 | `.edge-cdp/` | 否 | 首次 `launch_edge.py` 自动生成，扫码后写入登录态 |
 
@@ -141,7 +141,7 @@ Trend-Radar/
 │   ├── HotspotCriteria.md  判定准则（冲突时以它为准）
 │   ├── Ops.md           运维手册：跑批、排障、模型层配置
 │   ├── keywords.template.md  词库结构与填法
-│   └── keywords.json    ← 不在仓库里，自己填
+│   └── keywords.json    随仓库提供（138 个主体），可自行增删
 │
 ├── config/sources.yaml  数据源、门槛、投递、模型层开关
 ├── src/                 代码
