@@ -1,4 +1,4 @@
-# 追星二创素材雷达
+# 二创热点雷达
 
 > English version: [`README.en.md`](README.en.md)
 
