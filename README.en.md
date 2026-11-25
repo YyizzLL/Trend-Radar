@@ -110,10 +110,30 @@ threshold in code follows them.
 
 ## Quick start
 
-### Route A: conversational agent (recommended)
+### Step 0: get the code
+
+Two options, pick one.
+
+**① Download the archive** (no git required)
+
+Open [Releases](https://github.com/YyizzLL/Trend-Radar/releases/latest) and click **Source code (zip)** under **Assets**, then unpack it.
+
+> The archive is the source tree (~0.6 MB): code, docs and sample config only.
+> It contains **no** API keys, no collected data, no browser session, no logs.
+>
+> You will not find `.env` or real files under `data/` — those are created locally on first run.
+
+**② Use git**
 
 ```bash
 git clone https://github.com/YyizzLL/Trend-Radar.git && cd Trend-Radar
+```
+
+All commands below run from the **project root** (the folder containing `requirements.txt`).
+
+### Step 1: install deps and log in to Douyin
+
+```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
@@ -122,19 +142,20 @@ python scripts/doctor.py      # deps / timezone / keys / port / keyword library
 python scripts/launch_edge.py # starts Edge; scan the QR code to log into Douyin
 ```
 
-Then have the agent do reconnaissance in a conversation; it writes
-`data/input/query_plan.json`, after which:
+### Step 2: route A — conversational agent (recommended)
+
+Have the agent do reconnaissance in a conversation; it writes `data/input/query_plan.json`, then:
 
 ```bash
 python scripts/collect_douyin.py              # collect (reads query_plan.json)
-python -m src.main --run                       # judge + render
+python -m src.main --run                      # judge + render
 # or in one shot:
 python scripts/daily_run.py --trigger manual --skip-plan
 ```
 
 Output lands in `sandbox/runs/<timestamp>/report.md`.
 
-### Route B: scripts only
+### Step 2 (alternative): route B — scripts only
 
 ```bash
 python scripts/plan_queries.py     # plan from hot list / charts / seeds only
@@ -144,7 +165,7 @@ python -m src.main --run           # judge + render
 
 No search API needed; coverage is narrower, as described above.
 
-### Scheduled runs
+### Step 3 (optional): scheduled runs
 
 ```bash
 python scripts/install_task.py     # 09:00 main run + 2 min after login + 11:30 retry
@@ -158,6 +179,7 @@ The scheduled task uses route B. **To get route-A quality unattended, wire in a 
 ---
 
 ## Prerequisites
+
 
 **This is not a clone-and-run tool.** External services must be provisioned by you.
 

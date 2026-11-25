@@ -103,10 +103,30 @@
 
 ## 快速开始
 
-### 路线 A：对话 Agent（推荐）
+### 第 0 步：拿到代码
+
+两种方式，选一种。
+
+**① 下载压缩包**（不想装 git 就选这个）
+
+打开 [Releases](https://github.com/YyizzLL/Trend-Radar/releases/latest)，在 **Assets** 里点 **Source code (zip)**，解压后进入目录。
+
+> 压缩包就是源码（约 0.6 MB），只有代码、文档和示例配置：
+> **不含**密钥、采集数据、浏览器登录态、运行日志。
+>
+> 第一次打开时看不到 `.env` / `data/` 里的真实内容——它们都在本机运行时才生成。
+
+**② 用 git**
 
 ```bash
 git clone https://github.com/YyizzLL/Trend-Radar.git && cd Trend-Radar
+```
+
+下面所有命令都在**项目根目录**执行（含 `requirements.txt` 的那一层）。
+
+### 第 1 步：装依赖 + 登录抖音
+
+```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
@@ -115,18 +135,20 @@ python scripts/doctor.py      # 自检：依赖 / 时区 / 密钥 / 端口 / 词
 python scripts/launch_edge.py # 启动 Edge，在窗口里扫码登录抖音
 ```
 
-然后在对话里让 Agent 做侦察，它会写出 `data/input/query_plan.json`，接着：
+### 第 2 步：路线 A —— 对话 Agent（推荐）
+
+在对话里让 Agent 做侦察，它会写出 `data/input/query_plan.json`，然后：
 
 ```bash
 python scripts/collect_douyin.py              # 采集（自动读 query_plan.json）
-python -m src.main --run                       # 判定 + 出日报
+python -m src.main --run                      # 判定 + 出日报
 # 或一步到位：
 python scripts/daily_run.py --trigger manual --skip-plan
 ```
 
 产物在 `sandbox/runs/<时间戳>/report.md`。
 
-### 路线 B：纯脚本
+### 第 2 步（备选）：路线 B —— 纯脚本
 
 ```bash
 python scripts/plan_queries.py     # 只用热榜/榜单/热种生成计划
@@ -134,9 +156,9 @@ python scripts/collect_douyin.py   # 采集
 python -m src.main --run           # 判定 + 出日报
 ```
 
-这条路不接任何搜索 API，代价是覆盖面窄——见开头那张表。
+不接任何搜索 API，代价是覆盖面窄——见开头那张表。
 
-### 想定时跑
+### 第 3 步（可选）：定时跑
 
 ```bash
 python scripts/install_task.py     # 09:00 主跑 + 登录后 2 分钟 + 11:30 失败重试
@@ -149,6 +171,7 @@ python scripts/install_task.py     # 09:00 主跑 + 登录后 2 分钟 + 11:30 �
 ---
 
 ## 前置条件
+
 
 **这不是 clone 下来就能跑的工具。** 外部服务要自己申请。
 
