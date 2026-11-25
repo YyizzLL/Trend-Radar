@@ -1,18 +1,19 @@
-"""D 标签层 · 复用短语。
+"""文案候选的合并与评估。
 
-两个不同的动作，别混：
+2026-11-25 起「短语」不再是一个独立概念——它只是文案候选的三个来源之一
+（n-gram 复用句 / 高赞独特句 / 热榜句）。原来的 copy/title/noise 三分类已删：
+同一批句子判两遍、口径还打架。
 
-- `label()`    —— 数据清洁：判 copy / title / noise，决定这句话能不能留在候选池。
-                  结果写 `phrase_labels.json`，下一轮生效。人工 `--label` 可覆盖。
-- `evaluate()` —— 产品判断：留下来的句子，能不能当追星二创文案用、怎么用。
-                  只在当天跑一次，结果直接进日报，不落长期状态。
-
-分开是因为前者错了会毁数据，后者错了只是当天少一条。
+- `merge_variants()` —— 同一句的不同切法合并成一条（「上上上升期」vs「上上上上升期」）。
+- `evaluate()`       —— 唯一的加工入口：把候选句子补齐成能直接用的成品，
+                        补不出来的丢掉。每天一次，结果直接进日报，不落长期状态。
 """
 
 from __future__ import annotations
 
 import logging
+import re
+from collections import Counter
 from typing import Any
 
 from . import prompts
@@ -20,48 +21,44 @@ from .client import LLM
 
 log = logging.getLogger("radar.llm.phrases")
 
-VALID = {"copy", "title", "noise"}
-EVAL_USE = {"use", "watch", "skip"}
+# 交付句与原句的字重叠下限。低于这个值说明模型不是「补齐」而是「另写一句」。
+# 2026-11-25 实测：「周深厦门演唱」被补成「一路打拼终抵百场…」——原句里没有这些字。
+MIN_OVERLAP = 0.5
+
+_NON_CJK_RE = re.compile(r"[^\u4e00-\u9fa5]")
 
 
-def label(
-    llm: LLM,
-    todo: list[dict[str, Any]],
-    *,
-    limit: int = 12,
-) -> tuple[dict[str, str], dict[str, Any]]:
-    """返回 ({短语: 标签}, 统计)。失败返回空，人工流程照旧可用。"""
-    items = [t for t in todo if str(t.get("phrase") or "").strip()][:limit]
-    stats: dict[str, Any] = {"calls": 0, "input": len(items), "kept": 0}
-    if not items:
-        return {}, stats
+def _overlap(text: str, source: str) -> float:
+    """交付句里有多少字来自原句（按字频交集 / 交付句长度，只算汉字）。
 
-    system, user = prompts.phrase_prompt(items)
-    res = llm.json_call(layer="phrase", system=system, user=user)
-    stats["calls"] = 1
-    if not res.ok:
-        stats["failed"] = 1
-        return {}, stats
+    比最长公共子串宽松：允许删字、换专名、调语序，只挡住「整句另写」。
+    """
+    a, b = _NON_CJK_RE.sub("", text), _NON_CJK_RE.sub("", source)
+    if not a:
+        return 1.0
+    if not b:
+        return 0.0
+    pool = Counter(b)
+    common = sum(min(n, pool[ch]) for ch, n in Counter(a).items() if ch in pool)
+    return common / len(a)
 
-    known = {str(t["phrase"]): t for t in items}
-    data = res.data if isinstance(res.data, dict) else {}
-    out: dict[str, str] = {}
-    for row in data.get("labels") or []:
-        if not isinstance(row, dict):
-            continue
-        phrase = str(row.get("phrase") or "").strip()
-        lab = str(row.get("label") or "").strip().lower()
-        # 短语必须一字不差地来自输入，防止模型顺手「纠正」了断句残片
-        if phrase in known and lab in VALID:
-            out[phrase] = lab
-    stats["kept"] = len(out)
-    if out:
-        log.info("D 短语判定：%d 条（copy %d / title %d / noise %d）",
-                 len(out),
-                 sum(1 for v in out.values() if v == "copy"),
-                 sum(1 for v in out.values() if v == "title"),
-                 sum(1 for v in out.values() if v == "noise"))
-    return out, stats
+
+def _anchor(text: str, known: dict[str, dict[str, Any]], fallback: str) -> str:
+    """交付句该挂在哪条原句上（决定「在用 N 条」这类统计口径）。
+
+    模型给的 `from` 不一定是最佳锚点：它常挑「最完整的那个变体」当 from，
+    而那个变体只有 1 条在用；真正的热度在更短的公共句上。
+    所以优先取「被交付句包住、且在用条数最多」的那条。
+    """
+    body = _NON_CJK_RE.sub("", text)
+    best, best_v = fallback, -1
+    for phrase, src in known.items():
+        core = _NON_CJK_RE.sub("", phrase)
+        if core and core in body:
+            vids = int(src.get("videos") or 0)
+            if vids > best_v:
+                best, best_v = phrase, vids
+    return best
 
 
 def merge_variants(
@@ -137,13 +134,18 @@ def evaluate(
     material_names: list[str] | None = None,
     limit: int = 12,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """判断每条短语能不能当二创文案用，并给出用法。
+    """把候选句子加工成能直接用的成品文案。
 
-    返回 (带 use/usage/source/bgm 的列表, 统计)。失败返回空列表，
-    日报退回原来的「复用短语」栏，不影响发信。
+    模型只做两件事：给成品（`text`），或者丢掉。不再分类、不再解释怎么用。
+    2026-11-25 之前是 use/watch/skip 三分类，`watch` 成了垃圾桶 ——
+    16 条候选 8 条进去，其中 6 条只需删标签或补主语就是可交付的。
+
+    返回 (带 from/text/videos/... 的列表, 统计)。失败返回空列表，不影响发信。
     """
     picked = [p for p in phrases if str(p.get("phrase") or "").strip()][:limit]
-    stats: dict[str, Any] = {"calls": 0, "input": len(picked), "use": 0, "watch": 0, "skip": 0}
+    stats: dict[str, Any] = {
+        "calls": 0, "input": len(picked), "kept": 0, "rewritten": 0, "drops": 0,
+    }
     if not picked:
         return [], stats
 
@@ -172,18 +174,24 @@ def evaluate(
     for row in data.get("items") or []:
         if not isinstance(row, dict):
             continue
-        phrase = str(row.get("phrase") or "").strip()
-        use = str(row.get("use") or "").strip().lower()
-        # 原句必须一字不差来自输入：模型爱「顺手改写」，改过的句子是它编的
-        if phrase not in known or use not in EVAL_USE:
+        frm = str(row.get("from") or "").strip()
+        text = str(row.get("text") or "").strip()
+        # 原句必须一字不差来自输入：模型爱「顺手改写 from」，改了就对不上统计
+        if frm not in known or not text:
             continue
-        src = known[phrase]
+        # 补齐可以删字、换专名，但不能整句另写：交付句得有一半的字来自原句
+        if _overlap(text, frm) < MIN_OVERLAP:
+            stats["rejected"] = stats.get("rejected", 0) + 1
+            continue
+        # 统计口径挂在「被这句包住、在用最多」的原句上，而不是模型随手挑的 from
+        anchor = _anchor(text, known, frm)
+        src = known[anchor]
         out.append(
             {
-                "phrase": phrase,
-                "use": use,
-                "usage": str(row.get("usage") or "")[:40],
-                "source": str(row.get("source") or "")[:30],
+                # 原句：在用条数、圈层、寿命这些口径都挂在它身上
+                "phrase": anchor,
+                # 成品：渲染只用这一条。等于 from 时就是原句
+                "text": text[:60],
                 "videos": src.get("videos", 0),
                 "likes_max": src.get("likes_max", 0),
                 "sample": (src.get("sample") or "")[:60],
@@ -197,17 +205,23 @@ def evaluate(
                 # 圈层来源：circle_hits/videos，0 表示纯跨圈
                 "circle_hits": src.get("circle_hits"),
                 "circle_ratio": src.get("circle_ratio"),
+                # 交付标记：下游据此区分「模型给过成品的」和「只有原始聚类的」
+                "delivered": True,
             }
         )
-        stats[use] = stats.get(use, 0) + 1
+        if text != frm:
+            stats["rewritten"] += 1
 
-    # 能用的排前面，同等按视频数
-    order = {"use": 0, "watch": 1, "skip": 2}
-    out.sort(key=lambda x: (order.get(x["use"], 3), -x["videos"]))
+    # 没改字的排前面：它们保留了原始统计口径
+    out.sort(key=lambda x: (x["text"] != x["phrase"], -int(x.get("videos") or 0)))
     stats["kept"] = len(out)
+    stats["drops"] = len(data.get("drops") or [])
+    # 留一份被丢掉的原句：提示词调紧时靠它判断是"该丢"还是"误杀"
+    stats["dropped"] = [str(x)[:40] for x in (data.get("drops") or [])][:20]
     if out:
         log.info(
-            "文案评估：%d 条 → use %d / watch %d / skip %d",
-            len(picked), stats.get("use", 0), stats.get("watch", 0), stats.get("skip", 0),
+            "文案评估：%d 条 → 成品 %d（改写 %d）/ 丢弃 %d / 拒收 %d",
+            len(picked), stats["kept"], stats["rewritten"],
+            stats["drops"], stats.get("rejected", 0),
         )
     return out, stats

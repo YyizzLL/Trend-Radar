@@ -10,12 +10,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
 import time
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -39,7 +37,6 @@ from .judge.anchor import match_subject as _match_subject
 from .judge.history import load_recent_hot
 from .judge.material import NEW_CHARTS, judge_materials
 from .judge.threshold import Threshold, apply as apply_threshold
-from .llm import adjudicate as llm_adjudicate
 from .llm import context as llm_context
 from .llm import from_config as llm_from_config
 from .llm import material as llm_material
@@ -47,9 +44,8 @@ from .llm import phrases as llm_phrases
 from .models import Candidate, EntityHit, Material, SourceStatus
 from .normalize import entity
 from .normalize.aggregate import aggregate, merge_variants
-from .normalize.cluster import cluster_captions
 from .normalize.songmatch import song_in_text
-from .normalize.phrase import top_phrases
+from .normalize.phrase import hot_lines, top_phrases, top_tags
 from .normalize.term import normalize as _norm
 from .normalize.merge import dedupe
 from .normalize.pattern import PatternMatcher
@@ -234,7 +230,6 @@ def _chart_hits(c: Candidate, songs: list[dict]) -> list[EntityHit]:
     所以要求它以 #话题 形式出现，或同现歌手名，否则不认。
     """
     text = f"{c.term} {' '.join(c.tags)}"
-    low = text.lower()
     out: list[EntityHit] = []
     for song in songs:
         name = str(song.get("name") or "")
@@ -465,16 +460,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     for aliases in alias_map(keywords).values():
         subj_norms |= {_norm(a) for a in aliases}
 
-    clusters = cluster_captions(
-        merged,
-        only_sources={"douyin_search"},
-        song_names={s["name"] for s in chart_songs},
-        material_names={h.name for _, hits in pairs for h in hits},
-        max_age_days=float(judge_cfg.get("recent_days", 7)),
-    )
-    if clusters:
-        log.info("文案簇：%d 个", len(clusters))
-
     materials = aggregate(pairs, today=today, lifecycle=lifecycle)
     materials = [m for m in materials if _norm(m.name) not in subj_norms]
 
@@ -530,29 +515,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     if recent_hot:
         log.info("跨天复用：历史热点 %d 个可比对", len(recent_hot))
 
-    # ---- L3 噪声误伤检测：找出「证据很多、却被判成噪声」的素材
-    # 判据是矛盾而不是边界：一堆人在用的素材，不可能是无关领域。
-    # 今天正式数据上通常是 0 个（词表刚修好），它只在词表失灵那天报警。
-    llm_verdict_map: dict[str, str] = {}
-    noise_alerts: list[dict[str, Any]] = []
-    adj_layer = llm_layers.get("adjudicate") or {}
-    if llm.available and adj_layer.get("enabled"):
-        verdicts = llm_adjudicate.review(
-            llm,
-            materials,
-            extra_noise=top_list(keywords, "噪声黑名单"),
-            min_evidence=int(adj_layer.get("min_evidence", 3)),
-            limit=int(adj_layer.get("max_calls", 25)),
-        )
-        for _keys, _v in ((verdicts.keep, "keep"), (verdicts.drop, "drop")):
-            for _k in _keys:
-                llm_verdict_map[_k] = _v
-        noise_alerts = verdicts.alerts
-        write_json(
-            run_dir / "llm_verdicts.json",
-            {"stats": verdicts.stats, "detail": verdicts.detail},
-        )
-
     materials = judge_materials(
         materials,
         lifecycle=lifecycle,
@@ -569,7 +531,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         lifespan=judge_cfg.get("lifespan_days") or None,
         chart_lifespan=judge_cfg.get("chart_lifespan_days") or None,
         chart_rank_cap=int(judge_cfg.get("chart_rank_cap", 15)),
-        llm_verdicts=llm_verdict_map or None,
     )
     lifecycle.save()
     # 卡片寿命台账：给「一周后按真实分布校准阈值」用（首见 / 出现天数 / 峰值）
@@ -671,18 +632,8 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
             bgm_plan.skipped,
         )
 
-    # 复用短语：文案梗的发现线索（整句聚类抓不到「半句相同」的变体）
-    # 两道过滤：B 规则层（作品语境）→ D 标签层（模型判定过的 title/noise 直接剔除）
-    labels_path = DATA_DIR / "state" / "phrase_labels.json"
-    phrase_labels: dict[str, str] = {}
-    if labels_path.exists():
-        try:
-            phrase_labels = {
-                str(k): str(v)
-                for k, v in json.loads(labels_path.read_text(encoding="utf-8")).items()
-            }
-        except Exception as exc:  # noqa: BLE001
-            log.warning("短语标签读取失败：%s", exc)
+    # 文案候选：n-gram 复用句（整句聚类抓不到「半句相同」的变体）
+    # 所有候选统一进 evaluate 加工一次，不再有独立的标签预分类（2026-11-25）。
 
     phrase_args = dict(
         exclude_names={m.name for m in materials} | {s["name"] for s in chart_songs},
@@ -702,7 +653,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     )
     phrases = top_phrases(
         [c for c in merged if c.source == "douyin_search"],
-        labels=phrase_labels,
         **phrase_args,
     )
 
@@ -768,33 +718,42 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     # 与上面的「待判定」是两件事：那个是数据清洁（长期），这个是产品判断（当天）。
     phrase_eval: list[dict] = []
     ph_layer = llm_layers.get("phrase") or {}
-    if llm.available and ph_layer.get("enabled") and phrases:
+
+    # ---- 两条新通道（2026-11-25）----
+    # 为什么不并进 phrases：它们不该走 n-gram 的跨天追踪——
+    # 高赞句是当天一次性表达，标签是话题不是句子，混进去会污染 first_seen 统计。
+    dy_items = [c for c in merged if c.source == "douyin_search"]
+    hot_picks = hot_lines(dy_items, limit=8)
+    tag_picks = top_tags(dy_items, limit=8)
+    if hot_picks:
+        log.info("高赞独特句：%d 条（最高 %.0f 赞）", len(hot_picks), hot_picks[0]["likes_max"])
+    if tag_picks:
+        log.info(
+            "高频标签：%d 个（%s）",
+            len(tag_picks),
+            "、".join("#" + str(t["phrase"]) for t in tag_picks[:3]),
+        )
+        write_json(run_dir / "hot_tags.json", tag_picks)
+
+    eval_pool = phrases + hot_picks
+    if llm.available and ph_layer.get("enabled") and eval_pool:
         phrase_eval, eval_stats = llm_phrases.evaluate(
             llm,
-            phrases,
+            eval_pool,
             material_names=[m.name for m in hot] + [s["name"] for s in chart_songs],
-            limit=int(ph_layer.get("max_items", 12)),
+            # 池子被两条通道撑大了，limit 跟着走，否则高赞句会被截在门外
+            limit=max(int(ph_layer.get("max_items", 12)), len(eval_pool)),
         )
         write_json(
             run_dir / "phrase_eval.json",
             {"stats": eval_stats, "items": phrase_eval},
         )
 
-    # 待模型判定的短语：跳过 B 规则，看看规则挡掉了什么、又漏了什么
-    todo = [
-        p for p in top_phrases(
-            [c for c in merged if c.source == "douyin_search"],
-            labels=phrase_labels,
-            ignore_works=True,
-            **phrase_args,
-        )
-        if p["phrase"] not in phrase_labels
-    ][:10]
-    if todo:
-        write_json(run_dir / "phrases_todo.json", todo)
-        log.info("复用短语：%d 个（待判定 %d 个）", len(phrases), len(todo))
-    elif phrases:
-        log.info("复用短语：%d 个", len(phrases))
+    # 2026-11-25：短语不再单独产出「待判定」清单。
+    # 它和文案是同一件事——短语只是候选来源之一，统一进上面的 evaluate，
+    # 不再走 copy/title/noise 那套预分类（判两遍、口径还打架）。
+    if phrases:
+        log.info("文案候选：%d 个", len(phrases))
 
     # 今日新歌：你关注主体的榜单新歌，单列一栏（不占素材卡名额）
     # 只收新歌榜 / 飙升榜：热歌榜是存量热度，老歌不该出现在「今日新歌」里
@@ -836,15 +795,37 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
                 detail={
                     "layers": {k: bool((v or {}).get("enabled")) for k, v in llm_layers.items()},
                     "material": llm_material_stats,
-                    "verdicts": llm_verdict_map,
-                    "noise_alerts": [
-                        {"name": a["name"], "mentions": a["mentions"],
-                         "noise_reason": a.get("noise_reason", "")}
-                        for a in noise_alerts
-                    ],
                 },
             )
         )
+
+    # 抖音热榜热梗：平台已经排过序的当天内容，比我们自己的 n-gram 更可靠
+    # （自带热度值、自带日期、天然覆盖全网）。零额外采集——热榜本来就在 merged 里。
+    # 不做精细分类，只把「能拿走东西」的挑出来交给用户扫（2026-11-25）。
+    hotboard: dict = {}
+    if llm.available:
+        hot_items = [
+            {"term": c.term, "rank": c.rank, "hot_value": c.field.get("hot_value")}
+            for c in merged
+            if c.source == "douyin_hot"
+        ][:60]
+        if hot_items:
+            system, user = llm_phrases.prompts.hotboard_prompt(
+                hot_items, now.strftime("%Y-%m-%d")
+            )
+            res = llm.json_call(layer="hotboard", system=system, user=user)
+            if res.ok and isinstance(res.data, dict):
+                hotboard = {
+                    k: [str(x)[:80] for x in (res.data.get(k) or []) if x]
+                    for k in ("文案", "玩法", "drops")
+                }
+                write_json(run_dir / "hotboard.json", hotboard)
+                log.info(
+                    "热榜热梗：文案 %d / 玩法 %d / 丢弃 %d",
+                    len(hotboard.get("文案") or []),
+                    len(hotboard.get("玩法") or []),
+                    len(hotboard.get("drops") or []),
+                )
 
     elapsed = time.time() - started
     report = render_report(
@@ -855,10 +836,9 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         materials=materials,
         total_candidates=len(merged),
         entity_count=entity_total,
-        clusters=clusters,
-        phrases=phrases,
         phrase_eval=phrase_eval,
         chart_news=chart_news,
+        hotboard=hotboard,
     )
 
     write_text(run_dir / "report.md", report)
@@ -869,10 +849,9 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         run_dir / "report_data.json",
         {
             # size 是 dataclass 的 property，asdict 不会带上，单独补
-            "clusters": [{**asdict(c), "size": c.size} for c in clusters],
-            "phrases": phrases,
             "phrase_eval": phrase_eval,
             "chart_news": chart_news,
+            "hotboard": hotboard,
         },
     )
     write_json(
@@ -891,7 +870,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
                     "available": llm.available,
                     "stats": llm.stats,
                     "material": llm_material_stats,
-                    "verdicts": llm_verdict_map,
                 }
                 if llm_cfg.get("enabled")
                 else None

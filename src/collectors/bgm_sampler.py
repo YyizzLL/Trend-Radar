@@ -36,10 +36,11 @@ from ..normalize.songmatch import song_in_text
 AWEME_RE = re.compile(r"/video/(\d{6,})")
 MEDIA_SKIP = ["图文", "合集", "直播回放", "直播切片", "照片"]
 
-# 剪映模板 / 原声的通用占位名，对创作者没有参考价值
-PLACEHOLDER_RE = re.compile(
-    r"(模板音乐|模板创作人|创作的原声|剪映模板|^原声$|^bgm$)", re.I
-)
+# 剪映模板的通用占位名，对创作者没有参考价值。
+# 注意：`@xxx创作的原声` **不再算占位**——它是作者上传的原始音频，
+# 官方账号（@TWS_PLEDIS 这类）发的原声往往就是这首挑战曲本身，
+# 对二创恰恰最有用。以前一律丢弃，等于把唯一能拿到的 BGM 信息扔了（2026-11-25）。
+PLACEHOLDER_RE = re.compile(r"(模板音乐|模板创作人|剪映模板|^原声$|^bgm$)", re.I)
 
 
 def is_placeholder(title: str) -> bool:

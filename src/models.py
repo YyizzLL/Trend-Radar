@@ -91,7 +91,6 @@ class Material(BaseModel):
     variants: list[str] = Field(default_factory=list)   # 合并进来的其他写法
     repeat_days: int = 0              # 连续第几天出现（1 = 首次；0 = 无历史数据）
     repeat: bool = False              # 是否属于「昨日已有」的复用卡（受单日额度限制）
-    llm_verdict: str = ""             # 模型复核：keep / drop（空 = 未送审）
     cls: str = ""                     # 热点 / 候选 / 丢弃
     reason: str = ""
     score: float = 0.0

@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from . import prompts
@@ -32,22 +31,7 @@ _SUFFIX_RULES: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
     (("演唱会", "巡演", "音乐节"), ("演唱会",)),
 ]
 
-# 玩法名的尾巴：去掉之后再搜，命中率更高
-_TAIL_RE = re.compile(r"(开赛了|来袭|火了|刷屏|出圈|上线|定档|官宣|挑战赛|挑战季)$")
-_SPLIT_RE = re.compile(r"[，,。！!？?～~]")
-# 玩法类必须有这些词之一，否则是模型把「事件」当成了「玩法」
-_PLAY_RE = re.compile(r"(挑战|变装|转场|卡点|特效|手势舞|仿妆|合拍|摇)")
-
 MIN_Q, MAX_Q = 2, 20
-
-
-def _is_sentence(title: str) -> bool:
-    """C 类要求是「一句能独立成立的话」。
-
-    热搜标题里常见「人名 人名+动作」这种拼接（如「张小斐 杨幂坐在我的玉腿上」），
-    直接当查询词会搜出无关内容，所以带空格的整句一律不要。
-    """
-    return not re.search(r"[\s　]", title)
 
 
 def select(
@@ -113,97 +97,3 @@ def select(
     return out, stats
 
 
-def _strip_tail(title: str) -> str:
-    return _TAIL_RE.sub("", title).strip()
-
-
-def _one(item: dict[str, Any]) -> list[str]:
-    """按类型把一条热搜变成 1~2 个查询词。"""
-    title = str(item.get("title") or "").strip()
-    typ = item.get("type")
-    subj = str(item.get("subject") or "").strip()
-
-    if typ == "B":
-        # 玩法：标题里必须真有玩法词。
-        # 11-13 实测模型会把「徐峥刷脸惊了」这种事件判成玩法，这里兜一层。
-        if not _PLAY_RE.search(title):
-            return []
-        name = _strip_tail(title)
-        return [name] if name else []
-
-    if typ == "C":
-        # 句子：取第一个分句的核心，整句太长搜不到
-        if not _is_sentence(title):
-            return []
-        core = _SPLIT_RE.split(title)[0].strip()
-        return [core[:12]] if len(core) >= 4 else []
-
-    if typ == "A":
-        if not subj:
-            return []
-        for kws, suffixes in _SUFFIX_RULES:
-            if any(k in title for k in kws):
-                return [f"{subj} {s}" for s in suffixes]
-        # 匹配不到内容形态就别退化成裸主体名——那是 D 类的事，
-        # 而且裸名会重复占用配额（「张颂文」和「张颂文 名场面」两条）
-        return []
-
-    if typ == "D":
-        # 主体：光搜人名回来全是同质内容，加形式词能捞出可复用的玩法
-        return [f"{subj} 转场"] if subj else []
-
-    return []
-
-
-def to_queries(
-    items: list[dict[str, Any]],
-    *,
-    max_queries: int = 8,
-) -> list[dict[str, Any]]:
-    """把筛选结果转成查询词。去重 + 长度校验，超长的直接丢。
-
-    按类型**轮流**取，不是按顺序取满——11-13 实测：前 8 条全是 A 类物料，
-    把「后会友期」这种 C 类热梗挤掉了（它在 kept 里排第 11）。
-    """
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    by_type: dict[str, list[dict[str, Any]]] = {}
-    for it in items:
-        by_type.setdefault(str(it.get("type") or ""), []).append(it)
-    for lst in by_type.values():
-        lst.sort(key=lambda x: int(x.get("rank") or 999))
-
-    # A（物料）/ C（句子）优先，B（玩法）次之，D（主体）最后
-    while len(out) < max_queries:
-        before = len(out)
-        for typ in ("A", "C", "B", "D"):
-            if len(out) >= max_queries:
-                break
-            bucket = by_type.get(typ) or []
-            while bucket:
-                it = bucket.pop(0)
-                picked = _one(it)
-                added = False
-                for raw in picked:
-                    q = re.sub(r"\s+", " ", raw).strip()
-                    if not (MIN_Q <= len(q) <= MAX_Q) or q in seen:
-                        continue
-                    seen.add(q)
-                    out.append(
-                        {
-                            "q": q,
-                            "type": "热种",
-                            "from_title": it["title"],
-                            "kind": typ,
-                            "rank": it.get("rank", 0),
-                        }
-                    )
-                    added = True
-                    if len(out) >= max_queries:
-                        break
-                if added:
-                    break       # 这一轮该类取到一个，换下一类
-        if len(out) == before:
-            break           # 所有类都取不出东西了
-    return out

@@ -69,7 +69,10 @@ def main() -> int:
         kept, stats, queries = [], {"input": 0, "kept": 0}, []
     else:
         kept, stats = seed_filter.select(llm, seeds, limit=limit)
-        queries = seed_filter.to_queries(kept, max_queries=int(tb.get("max_queries", 8)))
+        # 2026-11-25：种子不再转查询。它降级成「侦察输入」之一——
+        # 和联网搜索结果一起喂给侦察环节判断，不再单独生成检索词，
+        # 也不再享受「独立配额」的待遇。
+        queries: list[dict] = []
 
     out = Path(args.out) if args.out else OUT
     out.parent.mkdir(parents=True, exist_ok=True)

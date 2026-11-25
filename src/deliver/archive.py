@@ -75,7 +75,6 @@ def archive_run(
     # 没有传入渲染结果时，用本轮数据重建（迁移历史目录时会走这里）
     # 但如果 report_data.json 已被清理，硬重建会得到「新歌0/文案0」的残缺邮件，
     # 那还不如不生成，只留 report.md 与 sent.json 说明。
-    rebuilt = bool(html)
     note = ""
     if not html and (run_dir / "report_data.json").exists():
         try:
@@ -87,7 +86,6 @@ def archive_run(
             subject = subject or digest_mod.subject_line(d)
             html = render_html(d, limits=limits)
             text = render_text(d)
-            rebuilt = True
         except Exception:  # noqa: BLE001 - 归档不能因为渲染失败而中断
             html, text = "", ""
     elif not html:

@@ -31,9 +31,9 @@ sources:
     publish_time: 7                          # 采集 URL 的时间窗（天数）；0 表示不筛选
     # 注意：内容级时效门槛在 `threshold.max_age_days`，这里只影响搜索 URL
     # 计划优先：scripts/plan_queries.py 生成 data/input/query_plan.json
-    # 下面的 subjects/chart_songs/templates 只在没有计划文件时兜底
+    # 没有计划文件时直接报错退出——旧版会回退到「按日期轮转」，已删除
     plan_file: "data/input/query_plan.json"
-    max_queries: 48        # 单轮查询上限（原 40，加 8 个「热种」）
+    max_queries: 34        # 单轮查询上限（四类：歌名/主体/玩法/热种）
     scroll: 5              # 每查询滚动次数（整页：16 + 10×5 ≈ 66 条）
                            # 注：若用实验开关 --spa（页内改词），建议临时调到 8——
                            # 改词不带 publish_time 过滤，需要更深才能收到同样多的新内容
@@ -47,16 +47,11 @@ sources:
     # 仍无改善才中止，交给 daily_run 按覆盖率续采。
     empty_cooldown_s: 240
     empty_cooldowns: 2
-    quota:                 # 计划里的配额分配
-      歌名: 15
-      挑战: 10
-      主体: 10
-      发现: 5
-      热种: 8              # 来自 tunbang 聚合榜，见文件末尾 tunbang 段
-    # 兜底参数
-    subjects: 2
-    chart_songs: 8
-    templates: "转场挑战"
+    quota:                 # 四类查询的配额（2026-11-25：20 → 34，补回韩娱覆盖）
+      歌名: 12             # 榜单歌名，词库只用于排序
+      主体: 12             # 有信号的优先；剩余按 region 均分轮转补齐（内娱/韩娱各半）
+      玩法: 4              # 热榜形式词优先，排不满用泛词（变装/转场/卡点）补
+      热种: 6              # 来自 tunbang 聚合榜，见文件末尾 tunbang 段
 
   douyin_music:
     enabled: false       # 未接入；关闭时 BGM 证据标记为「不可用」
@@ -68,6 +63,8 @@ sources:
   qq_music:
     enabled: true
     charts: ["27", "62", "26"]   # 27 新歌榜 / 62 飙升榜 / 26 热歌榜
+    signal_charts: ["27", "62"]  # 只有这两个榜算「今天有热点」；热歌榜是常青榜，
+                                 # 老歌能挂几个月，拿它当信号会让孙燕姿/薛之谦天天霸占配额
     max_rank: 30
     qps_ms: 800            # 换榜之间的间隔（毫秒）。写 200 会被限流，热歌榜曾因此解析为空
 
@@ -140,22 +137,15 @@ llm:
   cache_ttl_days: 3
   extra_body: {}                 # 透传字段（如关 thinking）。不确定参数名就别填，不猜
   layers:
-    # L1 查询生成：产出落 data/input/query_plan_llm.json，不混进当天计划
-    plan:
-      enabled: false
-      quota: 6
+    # 2026-11-25：删掉两个从未启用的层——
+    #   plan（L1 查询生成）：一直是 false，查询改由 agent 侦察后写 plan 文件
+    #   adjudicate（L3 噪声裁决）：一直是 false，要解决的问题由热榜热梗覆盖
     # L2 素材理解：按搜索查询分组，一组一次调用
     material:
       enabled: true
       max_items_per_query: 40
       min_items: 3               # 少于 3 条的分组跳过（凑不出 2 条证据，纯烧钱）
       max_calls: 30
-    # L3 噪声误伤检测：只送「证据 ≥3 条却被判噪声」的素材（信号自相矛盾）。
-    # 平时几乎不触发，词表失灵那天报警。硬领域也送 —— 11-09 的两次误判正是硬领域造成的。
-    adjudicate:
-      enabled: false
-      max_calls: 25
-      min_evidence: 3
     # D 标签层 / 文案评估：判 phrases_todo.json 的标签（长期），
     # 以及当天这批句子「能不能当二创文案用、怎么用」（每天一次，直接进日报）
     phrase:

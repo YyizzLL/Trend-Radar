@@ -29,14 +29,7 @@ STOP_NAMES = {
     "封面", "预告", "mv", "bgm", "原声", "纯享", "高清", "4k", "8k",
 }
 
-EN_STOP = {
-    "bgm", "mv", "live", "hd", "vip", "a2o", "lite", "tf", "sm", "yg", "ai",
-    "dj", "ost", "amv", "mad", "focus", "kpop", "kpop", "ft", "feat", "remix",
-    "intro", "outro", "ver", "ver.", "the", "and", "you",
-}
-
 _CJK_RE = re.compile(r"[\u4e00-\u9fa5]")
-_EN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{2,19}")
 _CHALLENGE_RE = re.compile(r"^[\u4e00-\u9fa5A-Za-z0-9]{2,16}(挑战|挑战赛)$")
 
 

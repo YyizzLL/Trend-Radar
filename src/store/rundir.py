@@ -78,7 +78,6 @@ def _age_days(path: Path, today: "date") -> float:
 HEAVY_FILES = (
     "candidates.json",
     "report_data.json",
-    "phrases_todo.json",
     "bgm_plan.json",
     "run.log",
     "judged.json",        # 早期版本的产物名，代码已不再生成；历史目录里还存在

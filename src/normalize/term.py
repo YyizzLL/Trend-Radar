@@ -30,15 +30,5 @@ def normalize(text: str) -> str:
     return "".join(chars).strip().lower()
 
 
-def build_alias_index(alias_map: dict[str, list[str]]) -> dict[str, str]:
-    """别名 → 主名（归一后作为 key）。"""
-    index: dict[str, str] = {}
-    for canonical, aliases in alias_map.items():
-        index[normalize(canonical)] = canonical
-        for alias in aliases:
-            index[normalize(alias)] = canonical
-    return index
-
-
 def resolve(text: str, alias_index: dict[str, str]) -> str | None:
     return alias_index.get(normalize(text))

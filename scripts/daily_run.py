@@ -46,8 +46,8 @@ sys.path.insert(0, str(ROOT))
 from src.config import load_sources  # noqa: E402
 from src.constants import (  # noqa: E402
     EXIT_EDGE,
-    EXIT_LOGIN,
     EXIT_NEEDS_HUMAN,
+    EXIT_NO_PLAN,
     EXIT_STALLED,
     EXIT_VERIFY,
 )
@@ -485,6 +485,8 @@ def main() -> int:
     ap.add_argument("--email-only", action="store_true", help="不跑管线，用今天最新一版发信")
     ap.add_argument("--no-email", action="store_true", help="只出报，邮件写到 sandbox 预览")
     ap.add_argument("--skip-collect", action="store_true", help="复用现有采集数据")
+    ap.add_argument("--skip-plan", action="store_true",
+                    help="跳过种子/计划生成，直接用 data/input/query_plan.json（agent 侦察后写入）")
     ap.add_argument("--archive", action="store_true", help="强制归档，覆盖当天已有归档")
     ap.add_argument("--no-archive", action="store_true", help="只发信，不归档（试发用）")
     ap.add_argument("--allow-test", action="store_true",
@@ -559,17 +561,25 @@ def main() -> int:
                 edge_proc = ensure_edge(bool(auto_cfg.get("edge_headless", False)))
 
             if not args.skip_collect:
-                # 热点种子：抓聚合榜 → 模型筛 → 生成「热种」查询词。
-                # 放在生成计划之前，plan_queries 会读它。
-                # 失败不阻塞：第三方站或模型挂了，顶多少几个查询。
-                try:
-                    run_step("抓取热点种子", ["scripts/collect_seeds.py"],
-                             int(auto_cfg.get("seed_timeout_min", 5)) * 60)
-                except Exception as exc:  # noqa: BLE001
-                    log(f"⚠ 热点种子跳过（{exc}），继续用原有查询")
+                # 计划来源有两种：
+                # 1) 外部给（--skip-plan）：由 agent 当天联网侦察后写 query_plan.json。
+                #    「今天该搜谁」是随热点快速变化的信息，规则猜不准，交给语义判断更合适。
+                # 2) 自己生成（默认）：抓 tunbang 种子 + 规则生成，供无人值守时兜底。
+                if args.skip_plan:
+                    log("使用外部计划（--skip-plan）：跳过种子抓取与计划生成")
+                    if not (ROOT / "data" / "input" / "query_plan.json").exists():
+                        log("✘ 没有找到 data/input/query_plan.json，无法继续")
+                        return 1
+                else:
+                    # 热点种子：抓聚合榜 → 模型筛 → 生成「热种」查询词。
+                    try:
+                        run_step("抓取热点种子", ["scripts/collect_seeds.py"],
+                                 int(auto_cfg.get("seed_timeout_min", 5)) * 60)
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"⚠ 热点种子跳过（{exc}），继续用原有查询")
 
-                run_step("生成检索计划", ["scripts/plan_queries.py"],
-                         int(auto_cfg.get("plan_timeout_min", 5)) * 60)
+                    run_step("生成检索计划", ["scripts/plan_queries.py"],
+                             int(auto_cfg.get("plan_timeout_min", 5)) * 60)
 
                 collect_args = ["scripts/collect_douyin.py"]
                 if should_resume(today):
@@ -619,6 +629,11 @@ def main() -> int:
                         # 退出码语义统一在 src/constants：
                         # 3 验证码 / 4 页签 / 5 连不上 Edge / 6 登录失效 / 7 静默超时。
                         code = getattr(exc, "returncode", None)
+
+                        if code == EXIT_NO_PLAN:
+                            log("没有检索计划：今天还没做侦察，采集未启动。"
+                                "先跑 agent 侦察或 scripts/plan_queries.py 生成 query_plan.json")
+                            raise
 
                         if code in EXIT_NEEDS_HUMAN:
                             log("抖音登录态失效，停止重试——请在 Edge 窗口重新扫码登录")

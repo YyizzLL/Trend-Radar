@@ -23,7 +23,6 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `HotspotCriteria.md` | 判定准则：抽取规则、数据门槛、两条输出线的判定 | 判定时 |
 | `Ops.md` | 本文件：怎么装、怎么跑、坏了怎么查 | 部署 / 排障时 |
 | `keywords.json` | 词库：锚点层（主体 / 主体画像 / 成员归属 / 厂牌 / CP / 歌名）、时效层、形式层、模式层、别名、黑名单。**随仓库提供**，用户按需增删 | 采集前加载 |
-| `keywords.bak.json` | 扩充前的词库备份 | 回滚时 |
 
 ### 代码（`src/`）
 
@@ -32,7 +31,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `main.py` | 命令行入口，串起采集 → 过滤 → 抽取 → 聚合 → 判定 → 渲染 → 落盘 |
 | `config.py` | 读 `config/sources.yaml` 与 `keywords.json` |
 | `models.py` | 数据模型：`Candidate`（一条内容）、`Material`（素材卡）、`EntityHit`、`SourceStatus` |
-| `constants.py` | 共用常量：`TYPE_USAGE` / `TYPE_RANK` / `TYPE_QUERY`，以及**采集退出码**（`EXIT_*`，唯一定义处） |
+| `constants.py` | 共用常量：`TYPE_USAGE` / `TYPE_RANK`，以及**采集退出码**（`EXIT_*`，唯一定义处） |
 | `deps.py` | 依赖清单 `REQUIRED_MODULES`：`daily_run.ensure_deps` 与 `doctor.check_deps` 共用一份 |
 | `collectors/http.py` | 统一 HTTP：超时、重试、单源频控 |
 | `collectors/douyin_hot.py` | 抖音热榜（**综合新闻榜**；偶尔出现挑战词，不是主要来源，实测常为 0） |
@@ -45,21 +44,18 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `normalize/pattern.py` | 模板骨架抽取（`{X}变装` / `{X}转场` …） |
 | `normalize/entity.py` | 从标题抽素材实体：歌 / 模板 / 挑战 |
 | `normalize/aggregate.py` | 跨内容聚合 + 近义变体合并（剥骨架后缀比本体）→ 素材卡 |
-| `normalize/cluster.py` | 文案 3-gram 包含度聚类 → 文案簇（带宣发/素材/时效三道闸门） |
 | `normalize/songmatch.py` | 歌名匹配共用规则（区分「真提到」与撞词） |
-| `normalize/phrase.py` | 复用短语统计 → 文案梗发现线索（4~10 字中文短语） |
+| `normalize/phrase.py` | 文案候选三源：复用短语（4~16 字）、高赞独特句、高频标签 |
 | `judge/threshold.py` | 内容级数据门槛（L0 点赞 / L1 分位） |
 | `judge/works.py` | 作品语境判据：判断短语是「文案梗」还是「作品名」（游戏/影视/动漫） |
 | `judge/domain.py` | 领域噪声词表（体育/电竞/时政/财经/国际/社会） |
 | `judge/material.py` | 素材卡判定 + 排序 + 主体配额；`llm_verdicts` 参数接收模型复核结果（keep/drop 两态） |
 | `llm/client.py` | 模型客户端：OpenAI 兼容、`temperature=0`、响应缓存、审计落盘、**失败即降级** |
 | `llm/context.py` | 把 `CoreAssets/*.md` 按标题切片，按层只注入相关章节（不整篇塞） |
-| `llm/prompts.py` | 四套 prompt（L1 查询 / L2 素材 / L3 复核 / D 短语）+ 判定标准注入 |
+| `llm/prompts.py` | 提示词拼装层：正文在 `CoreAssets/Prompts.md`，这里只填数据并注入判定标准 |
 | `llm/material.py` | L2 素材理解：按搜索查询分组，输出 `EntityHit`；evidence url 必须回链，否则整条作废 |
-| `llm/adjudicate.py` | L3 噪声误伤检测：只送「证据 ≥3 条却仍被判噪声」的素材（信号自相矛盾），硬领域也送 |
-| `llm/seed_filter.py` | 热点种子：判聚合榜的 100 条热搜「能不能变成素材」（A物料/B玩法/C句子/D主体），再按类型拼查询词 |
-| `llm/plan.py` | L1 查询生成：模型召回世界知识 → 产出待验证的查询词，不直接进计划 |
-| `llm/phrases.py` | D 标签层：批量判 `phrases_todo.json`，结果写 `phrase_labels.json` |
+| `llm/seed_filter.py` | 热点种子：判聚合榜的 100 条热搜「能不能变成素材」（A物料/B玩法/C句子/D主体），只作侦察输入 |
+| `llm/phrases.py` | 文案候选合并 + `evaluate()`：把候选补齐成可直接用的成品，补不出来的丢掉 |
 | `store/lifecycle.py` | 模板词龄（first_seen），旧梗自动降权 |
 | `store/rundir.py` | 运行目录、落盘、清理 |
 | `report/render.py` | Markdown 日报渲染 |
@@ -74,8 +70,8 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 |---|---|---|
 | `launch_edge.py` | 启动带调试端口的 Edge（脱离父进程，不被回收）；`--check` 只查端口 | 每次跑批前 |
 | `doctor.py` | 环境自检：依赖 / 时区 / `.env` / 代理 / 9222 / **词库** / 数据规模 / 模型开关。有问题给退出码 1 | **出任何问题先跑它** |
-| `collect_seeds.py` | 抓 tunbang 聚合榜（娱乐榜 + 微博榜）→ 模型判「有没有二创价值」→ 转成抖音查询词，写 `data/input/hot_seeds.json`。失败不阻塞跑批 | 生成计划之前 |
-| `plan_queries.py` | 生成当日检索计划 `data/input/query_plan.json`（歌名/挑战/主体/发现/热种五类配额）；挑战类先取热榜、再用上轮结果补齐 | 每次采集前 |
+| `collect_seeds.py` | 抓 tunbang 聚合榜（娱乐榜 + 微博榜）→ 模型判「有没有二创价值」→ 写 `data/input/hot_seeds.json`。已降级为侦察的一路输入，不再自己转查询词 | 侦察之前 |
+| `plan_queries.py` | 按当日信号生成检索计划 `data/input/query_plan.json`（歌名/主体/玩法/热种四类）；主体只搜当天有热度的 | 没接外部计划时 |
 | `collect_douyin.py` | 按 `query_plan.json` 用 CDP 采集 → `data/input/douyin_latest.json`；支持 `--resume` / `--limit` / `--scroll` / `--max-empty` / `--max-shots` / `--page-recycle` / `--spa`（改词优先，实验）/ `--retries` / `--select-timeout` / `--empty-cooldowns`（风控窗口里用「快速浅扫」：`--retries 1 --select-timeout 8 --empty-cooldowns 0`，靠多轮累积而不是单轮重试） | 每次跑批 |
 | `probe/probe_search_mode.py` | 对比「整页 goto」与「页内改词」的产出质量：条数、URL 重合率、时效分布、请求数 | 改采集方式前后 |
 | `probe/cdp_probe.py` | 单次探测搜索页，排障用 | 采集异常时 |
@@ -85,9 +81,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `daily_run.py` | 每日总入口：单日锁 → Edge → 计划 → 采集 → 出报 → 发信 |
 | `install_task.py` | 注册/查询/删除 Windows 计划任务（登录后 2 分钟 + 09:00 + 11:30 失败重试）；`--save-xml` 生成可手动导入的 XML |
 | `migrate_daily.py` | 一次性迁移：把历史 `sandbox/runs/<ts>` 归档到 `data/daily/<日期>/` |
-| `review_phrases.py` | 查看/写入「待判定复用短语」的标签（copy / title / noise）；`--auto` 让模型批量判（D 标签层），`--label` 人工改判随时覆盖 | 每轮跑完后 |
-| `llm_plan.py` | L1 查询生成：模型召回 → `data/input/query_plan_llm.json`，**不覆盖**当天计划；`--dry` 只看 prompt 规模，`--merge` 才并入 `query_plan.json` | 想试模型召回时 |
-| `llm_replay.py` | 离线回放 L2/L3：读已有 `candidates.json`，不联网不采集，产物写 `sandbox/replay/`；`--dry` 估算调用量与成本 | 切换模型层前后对照 |
+| `llm_replay.py` | 离线回放素材理解层：读已有 `candidates.json`，不联网不采集，产物写 `sandbox/replay/`；`--dry` 估算调用量与成本 | 切换模型前后对照 |
 | `build_keywords.py` | 重建词库：主体 + 主体画像 + 成员归属 + 厂牌 + 别名（可重复运行） | 维护词库时 |
 | `probe/probe_music.py` | 探测视频页能否读到 BGM（结论：读不到，留作证据） | 排障 / 复验时 |
 
@@ -96,13 +90,12 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | 路径 | 存什么 | 能否删 |
 |---|---|---|
 | `data/input/douyin_latest.json` | 最近一次抖音采集结果（逐查询落盘，可 `--resume`） | 可覆盖，别删文件本身 |
-| `data/input/query_plan.json` | 当日检索计划（歌名/挑战/主体/发现四类） | 可覆盖，每次采集前重生成 |
+| `data/input/query_plan.json` | 当日检索计划（歌名/主体/玩法/热种四类，或由 agent 直接写） | 可覆盖，每次采集前重生成 |
 | `data/state/bgm_cache.json` | 已采样过的素材→BGM，避免重复花配额 |
-| `data/state/phrase_labels.json` | 复用短语的人工/模型标签 |
 | `data/state/daily_lock.json` | 单日锁：date/status/attempts，保证一天只跑一次 |
 | `data/state/term_lifecycle.json` | 模板词首次出现时间 | ❌ 删了词龄归零 |
 | `data/daily/YYYY-MM-DD/` | **已发出的日报归档**：report.md / daily.json / materials.json / meta.json / email.html / sent.json | ❌ 历史资产，永不自动清理 |
-| `sandbox/runs/<时间戳>/` | 每次试运行的 report / candidates / materials / `bgm_plan.json` / `phrases_todo.json` / 日志 | ✅ 随时删 |
+| `sandbox/runs/<时间戳>/` | 每次试运行的 report / candidates / materials / `bgm_plan.json` / `hotboard.json` / `phrase_eval.json` / 日志 | ✅ 随时删 |
 | `sandbox/diag/<时间戳>/` | 采集失败时的截图 + `diag.json`（URL/标题/正文前 200 字） | ✅ 3 天后自动清 |
 | `.edge-cdp/` | Edge 调试配置（**含登录态**，已 gitignore） | ❌ 删了要重新扫码登录 |
 
@@ -200,7 +193,7 @@ python scripts/collect_douyin.py                  # 2) 按计划采集（可中�
 python scripts/collect_douyin.py --resume         #    中断后接着跑
 python scripts/collect_douyin.py --limit 5        #    只跑前 5 个（调试）
 
-# 没有计划文件时，会回退到「主体轮转 + 模板词 + 榜单歌名」的旧逻辑
+# 没有计划文件会直接报错（exit=8），不再回退到旧的主体轮转
 python -m src.main --run --prod      # 额外产出 daily.json（归档由 daily_run 在发信后完成）
 python -m src.main --clean --days 7  # 清理 7 天前的运行目录
 ```
@@ -278,6 +271,11 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 > 三条触发器共用 `daily_run.py`，靠「交付事实 + 单日锁」保证一天只成功一次：
 > 登录 +2min / 09:00 / **11:30（仅当前面失败且 attempts<2 时才真正执行）**。
 > 只要当天已经发过信（`data/daily/<日期>/sent.json`），任何触发器都不再启动。
+>
+> **定时任务跑的是「路线 B」**：没有 `query_plan.json` 时由 `plan_queries.py` 按热榜/榜单/热种
+> 生成计划，覆盖比 agent 侦察窄；完全没计划时采集直接 `exit=8`，不会轮转。
+> 想在无人值守下拿到侦察效果，需接搜索 API 并补 `discover_events.py`
+> （提示词已写在 `Prompts.md` 的 `discover` 节）。
 
 **任务绑定的是「运行 `install_task.py` 的那个解释器」。** 它取 `sys.executable` 同目录的
 `pythonw.exe` 写进任务，所以：
@@ -334,12 +332,13 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 
 | 码 | 常量 | 含义 | `daily_run` 的处理 |
 |---|---|---|---|
-| 0 | `EXIT_OK` | 跑完（**不代表采全**，覆盖度另算） | 检查覆盖率，不足则续采 |
+| 0 | — | 跑完（**不代表采全**，覆盖度另算） | 检查覆盖率，不足则续采 |
 | 3 | `EXIT_VERIFY` | 人机验证 | **自动重启 Edge 换会话**（默认 2 次 × 等 90 秒）→ 仍被拦才告警转人工 |
 | 4 | `EXIT_PAGE` | 页签 / CDP 会话救不回来 | 换进程 `--resume` 续采 |
 | 5 | `EXIT_EDGE` | 连不上 `127.0.0.1:9222` | 重启 Edge 后 `--resume` |
 | 6 | `EXIT_LOGIN` | 登录态失效 | **不重试**，告警「请重新扫码」 |
 | 7 | `EXIT_STALLED` | 静默超时（N 分钟没有任何输出） | 杀掉进程树 → `--resume` 续采 |
+| 8 | `EXIT_NO_PLAN` | 没有检索计划（今天没做侦察） | **不重试**，提示「先跑 agent 侦察或 plan_queries.py」 |
 
 **3 为什么不直接转人工**：验证码绑在**浏览器会话**上，换 Python 进程没用，但**重启 Edge 就换了一个会话**——
 登录态在 `.edge-cdp` 里，重启后不用重新扫码。2026-11-16 重启 Edge 后一跑就通，是这条的依据；
@@ -364,7 +363,7 @@ python scripts/install_task.py --save-xml sandbox/daily_task.xml
 |---|---|---|---|
 | `candidates.json` | 0.5~1.5 MB | 中间产物，只在改判定逻辑时用 | **每个自然日只留最新一轮**，7 天后全删 |
 | `report.md` / `materials.json` / `meta.json` / `daily.json` / `run.json` | ~70 KB | 日报、素材卡、正式 JSON、运行标记 | 永久 |
-| `report_data.json` / `bgm_plan.json` / `phrases_todo.json` / `run.log` / `judged.json` | ~20 KB | 渲染与排障（`judged.json` 是旧版产物，仅历史目录还有） | **每个自然日只留最新一轮**，7 天后全删 |
+| `report_data.json` / `bgm_plan.json` / `hotboard.json` / `run.log` | ~20 KB | 渲染与排障（`judged.json` 是旧版产物，仅历史目录还有） | **每个自然日只留最新一轮**，7 天后全删 |
 | `email/preview.*` | ~47 KB | 仅 `--no-email` 时生成 | 同上 |
 | `sandbox/logs/daily-*.log` | 2~3 KB/天 | 调度层日志（谁在什么时候启动/跳过/失败） | 30 天 |
 | `sandbox/logs/step-<日期>-<步骤>.log` | 采集约 20~60 KB，其余 &lt;5 KB | **子进程完整输出**：每个查询的条数/耗时/模式、失败原因 | 30 天（与上面同一条规则） |
@@ -428,29 +427,25 @@ python -m src.main --clean --days 30       # 整体删除 30 天前的运行目�
 
 | 层 | 做什么 | 不做什么 | 开关 |
 |---|---|---|---|
-| **L1 查询生成** | 针对关注主体召回歌名/别名/名场面/CP/玩法，产出待验证查询词 | 不直接进当天计划；必须联网证伪才留 | `layers.plan.enabled` |
 | **L2 素材理解** | 一个搜索查询下的 40 条文案整批读，说出「这里有哪种具名素材」 | 不当判定层：产出只是多一个抽取器，仍走 aggregate → judge | `layers.material.enabled` |
-| **L3 噪声误伤检测** | 只送「证据 ≥3 条 **却仍被判噪声**」的素材——信号自相矛盾，多半是词表误伤 | 不送「差 1 条到门槛」的卡（那是证据不足）；不新增/改名素材 | `layers.adjudicate.enabled` |
-| **D 文案层** | ① 批量判 `phrases_todo.json` 的标签（长期，写 `phrase_labels.json`）② 每天判一次「这些句子能不能当二创文案用、怎么用」，直接进日报 | 不改素材判定；模型没开/失败就退回原来的「复用短语」栏 | `layers.phrase.enabled` |
+| **文案评估** | 每天一次：把复用句 / 高赞句 / 热榜句统一补齐成可直接用的成品，补不出来的丢掉 | 不改素材判定；模型没开或失败就退回「今日文案模板」栏 | `layers.phrase.enabled` |
 | **热点种子** | 判聚合榜热搜「能不能变成素材」（A物料/B玩法/C句子/D主体），再转成抖音查询词；不替代采集链路，只负责「今天该搜什么」 | 抓下来的标题 ≠ 结论，必须回抖音验使用量 | `tunbang.enabled` |
 
-**当前状态（2026-11-09 17:40）**：`llm.enabled: true`，只开了 `material`（L2）。
-L1 还没接进流水线（要先联网验证产出质量）；L3 平时不触发（今天的正式数据上是 0 个矛盾样本）；
-D 层配置关着，仍走人工 `--label`。**没有一次开满四层**——同时变多个变量，结果好坏都归因不了。
+**当前状态（2026-11-25）**：`llm.enabled: true`，开两层——`material`（素材理解）和
+`phrase`（文案评估）。查询生成和噪声复核已删除：前者由 agent 侦察替代，后者由热榜热梗覆盖。
 
 **五条工程约束**（比 prompt 重要）：
 
 1. **evidence 必须回链**：模型给的 url 必须真的在输入集合里，程序校验，对不上整条作废
-2. **只做救回/确认，不做晋升**：L3 只有 keep（免掉噪声判定）/ drop（维持丢弃）两票；
-   曾经有过 promote，回放实测零价值，已删除
+2. **不做第二套判定**：模型层只产出「素材」和「成品文案」，不参与 keep/drop 的二次裁决。
+   2026-11-25 删掉了从上线起就没启用的噪声复核层——两套口径比一套规则更难查
 3. **`temperature=0` + prompt 版本号 + 响应缓存**：日报要可复现，否则 `history.py` 的 streak 会失真
 4. **失败静默降级**：超时/JSON 非法只跳过该层，09:00 照常发信；但**失败必须写日志**，
    不能悄悄少抽几组素材
 5. **模型抽的词进词龄库门槛更高**：≥2 条独立证据 + 置信度 ≥0.7，否则每轮编新词会污染词龄
 
 **名字匹配要容错**：模型会把类型塞进名字里（实测拿到过 `SUPERSTAR（BGM）`）。
-L3 匹配走「全等 → 剥括号 → 同名唯一时忽略类型」三级兜底；一条都对不上会写 warning，
-不能让裁决静默丢失。
+素材归并走「全等 → 剥括号 → 同名唯一时忽略类型」三级兜底，不能让同一素材被拆成两张卡。
 
 **丢弃留痕**：每次跑批写 `run_dir/dropped.json`（全量丢弃 + 在用条数 + 原因），
 日报的「被丢弃」段按在用条数降序、高证据标 ⚠️。

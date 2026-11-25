@@ -42,6 +42,42 @@ _HARD_WORDS = {
     w for group, words in DOMAIN_NOISE.items() if group in HARD_NOISE_GROUPS for w in words
 }
 
+# 标签统计：抖音的「梗」大量以 #话题 形态存在（#MAMA、#权志龙mama），
+# 正文里可能一字不提。所以单独统计，不混进 n-gram——
+# 混进去会和正文粘连成「首秀权志龙」这种窗口，反而更脏。
+TAG_RE = re.compile(r"#([^\s#]{2,20})")
+
+# 高赞独特句：不等「被复制」，直接按点赞×时效取。
+# 2026-11-25 实测：「舞台杀疯啦」「我宣布 GiiiRIP 为 2026 神作」这类单条爆款
+# 只出现一次，被 ≥3 条门槛全挡掉，而它们比复用梗更鲜活。
+HOT_MIN_LIKES = 30000
+HOT_MAX_AGE = 3
+HOT_MIN_LEN = 8
+
+# 类别词过滤：「一键换装」「年末舞台」「声生不息」这类是**分类名**，不是可复用的句子。
+# 判据：6 字以内 + 不含任何虚词/情绪词 → 纯名词组合，当类别处理（2026-11-25）。
+# 真正能用的文案几乎都带「的我了是吗」或情绪词，不会被误伤。
+_FUNCTION_WORDS = set(
+    "我你他她它们这那么什怎谁的了着过是在有和与就都也还又很太最不没别把被给让对从向往会能要想说看真"
+)
+
+# 引流套话：跨主体度很高，但不是文案（「喜欢别忘记一键三连哦」跨了 9 个主体）
+_WATERMARK = (
+    "一键三连", "点赞", "关注", "转发", "收藏", "投币", "弹幕",
+    "评论区", "口德", "你为谁打", "艾特", "私信", "主页",
+)
+
+
+def _is_category_word(gram: str) -> bool:
+    """短且没有虚词 = 类别名，不是句子。"""
+    if len(gram) >= 6:
+        return False
+    return not (set(gram) & _FUNCTION_WORDS)
+
+
+def _is_watermark(gram: str) -> bool:
+    return any(w in gram for w in _WATERMARK)
+
 
 def _body(text: str) -> str:
     t = HASHTAG_RE.sub(" ", text or "")
@@ -62,8 +98,6 @@ def top_phrases(
     *,
     exclude_names: set[str] | None = None,
     exclude_phrases: set[str] | None = None,
-    labels: dict[str, str] | None = None,
-    ignore_works: bool = False,
     min_videos: int = DEFAULT_MIN_VIDEOS,
     limit: int = 8,
     subject_names: set[str] | None = None,
@@ -78,13 +112,15 @@ def top_phrases(
     exclude_phrases = {p for p in (exclude_phrases or set()) if p}
     noise = _noise_terms()
 
-    labels = labels or {}
     counter: Counter[str] = Counter()
     best_like: dict[str, float] = defaultdict(float)
     sample: dict[str, str] = {}
     contexts: dict[str, list[str]] = defaultdict(list)
     ages: dict[str, list[float]] = defaultdict(list)
     circle_hits: Counter[str] = Counter()
+    # 跨主体度：这条短语出现在几个不同主体的内容里。
+    # 跨 2 个以上说明是通用表达，跨 1 个大概率是粉丝黑话（2026-11-25）。
+    subject_sets: dict[str, set[str]] = defaultdict(set)
     subjects = {s for s in (subject_names or set()) if s}
 
     for cand in candidates:
@@ -100,7 +136,8 @@ def top_phrases(
         age = cand.field.get("age_days")
         age_ok = isinstance(age, (int, float)) and age >= 0
         # 圈内：文案里出现任一关注主体或其别名
-        in_circle = bool(subjects) and any(n in raw for n in subjects)
+        hit_subjects = {n for n in subjects if n in raw}
+        in_circle = bool(hit_subjects)
         seen: set[str] = set()
         for n in range(MIN_LEN, MAX_LEN + 1):
             for i in range(len(body) - n + 1):
@@ -112,6 +149,7 @@ def top_phrases(
             counter[gram] += 1
             if in_circle:
                 circle_hits[gram] += 1
+                subject_sets[gram] |= hit_subjects
             if len(contexts[gram]) < 6:
                 contexts[gram].append(cand.term)
             if age_ok and len(ages[gram]) < _AGE_CAP:
@@ -124,17 +162,17 @@ def top_phrases(
     for gram, count in counter.items():
         if count < min_videos:
             continue
-        label = labels.get(gram, "")
-        if label in {"title", "noise"}:
-            continue                      # 模型已判定：作品名 / 无关
         if any(name in gram or gram in name for name in exclude_names):
             continue
         if any(word in gram for word in exclude_phrases):
             continue
         if any(w in gram for w in noise):
             continue
+        # 类别名（一键换装 / 年末舞台）和引流套话（一键三连）不是文案
+        if _is_category_word(gram) or _is_watermark(gram):
+            continue
         # 规则层：来源文案在讲作品，且短语本身不像一句话 → 判专名
-        if not ignore_works and label != "copy" and looks_like_title(gram, contexts.get(gram, [])):
+        if looks_like_title(gram, contexts.get(gram, [])):
             continue
         cands.append((gram, count))
     # 去碎片（2026-11-17 改）：n-gram 会把同一句切成互相重叠的窗口，
@@ -195,8 +233,15 @@ def top_phrases(
                 return weight
         return _STALE_WEIGHT
 
-    # 排序：条数 × 新鲜度。老梗即便条数多，也会被新梗挤下去。
-    ordered = sorted(kept.items(), key=lambda kv: -(_fresh_weight(kv[0]) * kv[1]))
+    # 排序：条数 × 新鲜度 × 跨主体加成。
+    # 跨主体加分是「通用度」：一句话在 2 个团的内容里都出现，说明它能跨场景用；
+    # 只在 1 个团出现 20 次，大概率是粉丝黑话。用乘数而不是硬排序，
+    # 避免「跨 2 主体各 1 条」压过「单主体 20 条」（2026-11-25）。
+    def _score(gram: str, count: int) -> float:
+        spread = len(subject_sets.get(gram, ()))
+        return count * (1 + 0.5 * max(0, spread - 1)) * _fresh_weight(gram)
+
+    ordered = sorted(kept.items(), key=lambda kv: -_score(kv[0], kv[1]))
     return [
         {
             "phrase": gram,
@@ -212,6 +257,132 @@ def top_phrases(
             # 出现在多少条「提到关注主体」的内容里；0 = 纯跨圈
             "circle_hits": circle_hits.get(gram, 0),
             "circle_ratio": round(circle_hits.get(gram, 0) / count, 2) if count else 0.0,
+            # 跨主体度：出现在几个不同主体下，>=2 说明是通用表达
+            "subjects": sorted(subject_sets.get(gram, ()))[:5],
+            "subject_count": len(subject_sets.get(gram, ())),
         }
         for gram, count in ordered[:limit]
     ]
+
+
+def top_tags(
+    candidates: list[Candidate],
+    *,
+    min_videos: int = 3,
+    limit: int = 12,
+) -> list[dict]:
+    """高频话题标签：#MAMA / #权志龙mama 这类「梗以标签形态传播」的入口。
+
+    正文里可能一字不提，所以单列一条通道，不混进 n-gram（2026-11-25）。
+    返回按「使用条数 × 新鲜度」排序，字段与 top_phrases 对齐，方便复用判定层。
+    """
+    counter: Counter[str] = Counter()
+    best_like: dict[str, float] = defaultdict(float)
+    ages: dict[str, list[float]] = defaultdict(list)
+    ctx: dict[str, list[str]] = defaultdict(list)
+
+    for cand in candidates:
+        raw = cand.term or ""
+        tags = {t.strip() for t in TAG_RE.findall(raw) if t.strip()}
+        if not tags:
+            continue
+        likes = float(cand.field.get("likes") or 0)
+        age = cand.field.get("age_days")
+        age_ok = isinstance(age, (int, float)) and age >= 0
+        for tag in tags:
+            counter[tag] += 1
+            if likes > best_like[tag]:
+                best_like[tag] = likes
+            if age_ok and len(ages[tag]) < _AGE_CAP:
+                ages[tag].append(float(age))
+            if len(ctx[tag]) < 3:
+                ctx[tag].append(raw)
+
+    def _fresh(age_list: list[float]) -> float:
+        if not age_list:
+            return 1.0
+        med = median(age_list)
+        for limit_, weight in _FRESH_TIERS:
+            if med <= limit_:
+                return weight
+        return _STALE_WEIGHT
+
+    rows = [
+        {
+            "phrase": tag,
+            "videos": count,
+            "variants": [],
+            "likes_max": best_like.get(tag, 0),
+            "sample": (ctx.get(tag) or [""])[0],
+            "contexts": ctx.get(tag, []),
+            "works_ratio": 0.0,
+            "median_age": round(median(ages[tag]), 1) if ages.get(tag) else None,
+            "max_age": round(max(ages[tag]), 1) if ages.get(tag) else None,
+            "fresh_ratio": None,
+            "circle_hits": count,
+            "circle_ratio": 1.0,
+            "subjects": [],
+            "subject_count": 0,
+            "kind": "tag",
+        }
+        for tag, count in counter.items()
+        if count >= min_videos
+    ]
+    rows.sort(key=lambda r: -(_fresh(ages.get(r["phrase"], [])) * r["videos"]))
+    return rows[:limit]
+
+
+def hot_lines(
+    candidates: list[Candidate],
+    *,
+    min_likes: float = HOT_MIN_LIKES,
+    max_age: float = HOT_MAX_AGE,
+    min_len: int = HOT_MIN_LEN,
+    limit: int = 10,
+) -> list[dict]:
+    """高赞视频的独特表达：不等「被复制」，直接按点赞×时效取。
+
+    一条 6 万赞的视频，它的文案本身就被 6 万人验证过，不需要「被复制 3 次」
+    才叫梗。这类句子只出现一次，会被 top_phrases 的门槛全挡掉（2026-11-25）。
+    返回结构对齐 top_phrases，可直接进同一套评估。
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for cand in candidates:
+        raw = (cand.term or "").strip()
+        if not raw or raw in seen:
+            continue
+        likes = float(cand.field.get("likes") or 0)
+        age = cand.field.get("age_days")
+        if likes < min_likes:
+            continue
+        if not isinstance(age, (int, float)) or age > max_age:
+            continue
+        body = _body(raw)
+        if len(body) < min_len:
+            continue
+        # 纯宣发/纯数据的不算：这类句子没有情绪
+        if any(w in raw for w in ("官宣", "定档", "开播", "上线", "预告", "榜单", "销量")):
+            continue
+        seen.add(raw)
+        out.append(
+            {
+                "phrase": raw[:60],
+                "videos": 1,
+                "variants": [],
+                "likes_max": likes,
+                "sample": raw,
+                "contexts": [raw],
+                "works_ratio": 0.0,
+                "median_age": float(age),
+                "max_age": float(age),
+                "fresh_ratio": 1.0,
+                "circle_hits": 0,
+                "circle_ratio": 0.0,
+                "subjects": [],
+                "subject_count": 0,
+                "kind": "hot_line",
+            }
+        )
+    out.sort(key=lambda r: -r["likes_max"])
+    return out[:limit]

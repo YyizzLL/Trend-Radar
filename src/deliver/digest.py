@@ -14,15 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from ..constants import TYPE_RANK
-from ..report.textmerge import merge as merge_text
+from ..report.textmerge import related
 
 DEFAULT_LIMITS = {
     "circle": 8,          # 圈内素材
     "cross": 3,           # 跨圈模板
     "refs_per_material": 3,
-    "clusters": 4,        # 文案模板
     "chart_news": 8,      # 今日新歌
-    "phrases": 8,         # 复用短语
     "phrase_eval": 6,     # 可用文案（模型评估过的）
     "candidates": 10,     # 候选素材
 }
@@ -38,13 +36,14 @@ class Digest:
     circle: list[dict[str, Any]] = field(default_factory=list)
     cross: list[dict[str, Any]] = field(default_factory=list)
     refs: list[dict[str, Any]] = field(default_factory=list)
-    clusters: list[dict[str, Any]] = field(default_factory=list)
     chart_news: list[dict[str, Any]] = field(default_factory=list)
-    phrases: list[dict[str, Any]] = field(default_factory=list)
     # 模型评估过的文案：每项含 phrase / use / usage / source / bgm
     phrase_eval: list[dict[str, Any]] = field(default_factory=list)
     # 合并后的「今日文案」：整句簇 + 短语对齐后每条只出现一次（见 report/textmerge）
     text_entries: list[dict[str, Any]] = field(default_factory=list)
+    # 抖音热榜热梗：{文案: [...], 玩法: [...], drops: [...]}
+    # 平台排过序的当天内容，原始直出，不做二次判断（2026-11-25）
+    hotboard: dict[str, Any] = field(default_factory=dict)
     candidates: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -53,9 +52,7 @@ class Digest:
         return {
             "circle": len(self.circle),
             "cross": len(self.cross),
-            "clusters": len(self.clusters),
             "chart_news": len(self.chart_news),
-            "phrases": len(self.phrases),
             "phrase_eval": len(self.phrase_eval),
             "candidates": len(self.candidates),
         }
@@ -154,22 +151,14 @@ def build(run_dir: Path, limits: dict[str, int] | None = None) -> Digest:
         for m in candidates[: lim["candidates"]]
     ]
 
-    clusters = list(extra.get("clusters") or [])[: lim["clusters"]]
     chart_news = list(extra.get("chart_news") or [])[: lim["chart_news"]]
-    phrases = list(extra.get("phrases") or [])[: lim["phrases"]]
-    # 只把 use/watch 带进邮件：skip 是「用不了」，列出来只会占版面
-    phrase_eval = [
-        p for p in (extra.get("phrase_eval") or [])
-        if str(p.get("use") or "") in {"use", "watch"}
-    ][: lim["phrase_eval"]]
+    # 评估过的全带上：模型给的是成品，没有「用不了」的混在里面
+    phrase_eval = list(extra.get("phrase_eval") or [])[: lim["phrase_eval"]]
 
-    # 两个文案栏合成一份：整句簇与短语按相似度对齐，同一个梗只出一条
+    # 只收 delivered（模型给过成品）：没有成品的条目不该冒充文案
     text_entries = [
-        e for e in merge_text(
-            list(extra.get("clusters") or []), list(extra.get("phrase_eval") or [])
-        )
-        if str(e.get("use") or "") in {"use", "watch"}
-    ][: lim["phrase_eval"] + lim["clusters"]]
+        e for e in (extra.get("phrase_eval") or []) if e.get("delivered")
+    ][: lim["phrase_eval"]]
 
     notes: list[str] = []
     failed = [s for s in meta.get("sources", []) if s.get("status") == "failed"]
@@ -203,11 +192,10 @@ def build(run_dir: Path, limits: dict[str, int] | None = None) -> Digest:
         circle=circle,
         cross=cross,
         refs=refs,
-        clusters=clusters,
         chart_news=chart_news,
-        phrases=phrases,
         phrase_eval=phrase_eval,
         text_entries=text_entries,
+        hotboard=dict(extra.get("hotboard") or {}),
         candidates=cand_rows,
         notes=notes,
     )
@@ -220,11 +208,16 @@ def subject_line(d: Digest) -> str:
         f"跨圈{c['cross']}",
         f"新歌{c['chart_news']}",
     ]
-    # 文案数取「可直接用」的条数：合并后一栏里有 use + watch，
-    # 标题上写总数会让人以为都能直接用（2026-11-17 合并两栏后调整）。
-    usable = sum(1 for e in d.text_entries if e.get("use") == "use")
-    if not d.text_entries:
-        usable = c["clusters"]
+    # 文案数 = 采集成品 + 热榜句子（去重后）。
+    # 模型已经把「可直接用」和「补齐后可用的」合成一份，这里不再区分 use / watch（2026-11-25）。
+    usable = len(d.text_entries)
+    hot_copy = [x for x in ((d.hotboard or {}).get("文案") or []) if x]
+    if d.text_entries and hot_copy:
+        hot_copy = [
+            t for t in hot_copy
+            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
+        ]
+    usable += len(hot_copy)
     if usable:
         parts.append(f"文案{usable}")
     return f"【追星二创雷达】{d.date[5:] if d.date else ''}｜" + " ".join(parts)

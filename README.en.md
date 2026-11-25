@@ -1,136 +1,197 @@
 # Trend-Radar
 
+> 中文版：[`README.md`](README.md) ｜ Version: **v0.5.0**
+
 A daily radar that answers one question for fan-edit creators:
 **what can I actually use in a video today?**
 
-It scans Douyin (Chinese TikTok) every morning and returns three kinds of reusable assets:
+It scans Douyin (Chinese TikTok) and returns three kinds of reusable assets:
 
-- **BGM** — songs that are being used right now, not just chart positions
-- **Captions** — lines copied across many videos that still work out of context
-- **Formats** — dance challenges with an entry point, templates you can re-shoot
+- **BGM** — songs being used right now, not just chart positions
+- **Captions** — a line you can paste as a title or subtitle, with "how many videos use it" as evidence
+- **Formats** — challenges with an entry point, templates you can re-shoot
 
-Runs at 09:00 daily and delivers a Markdown digest by email.
+The output is a Markdown digest, optionally delivered by email.
 
 > Docs in `CoreAssets/` are written in Chinese. The code, config keys and this README are the
 > English entry point.
 
 ---
 
-## What the output looks like
+## ⚠️ Read this first: this version runs through a conversational agent
 
-```
-## In-circle material (fan-edit vertical) (8)
+**It is not a "install and it runs itself every morning" tool.**
 
-| # | Item | Type | Subject | Evidence |
-|---|------|------|---------|----------|
-| 1 | I'll Arrest You dance challenge | Challenge | ILLIT | 28 videos using it, day 5 (rising) |
-| 2 | Guandé Highway's End | BGM | Wang Yuan | New Song Chart #4; mentioned in 20 videos |
-| 3 | CallMyName challenge | Challenge | NAME | 19 videos using it |
+There is exactly one reason: **deciding who to search for requires looking up "what is happening
+this week" on the web** — award-show lineups, music-variety guest lists. Those are not in the
+Douyin charts and not in any fixed RSS feed. That step is done by an agent in a conversation
+(web search → map to the keyword library → write the plan file). The project itself only
+**executes the plan**: collect → judge → render.
 
-## Usable captions today (3)
+Three ways to run it:
 
-| Caption | In use | How to use | Source |
-|---------|--------|------------|--------|
-| Draw a prison for myself | 3 | Slow montage of staying loyal to one idol | "Later Friends" |
-```
+| Mode | Who decides what to search | Needs a human | Coverage |
+|---|---|---|---|
+| **A. Conversational agent (default)** | Agent searches the web → writes `data/input/query_plan.json` | One conversation per day | Widest; finds event lineups |
+| **B. Scripts only** | `scripts/plan_queries.py` uses hot list / charts / seeds | No | Narrow: only "someone released a song today" |
+| **C. Scripts + search API** | `scripts/discover_events.py` calls a search API (**not implemented yet**) | No | Close to A; needs one API key |
 
-"Evidence" means **how many videos use it**, not a popularity score —
-high heat does not mean it is usable in an edit.
+> **If your goal is unattended automation**, wire in a search API (Bocha / Tavily / Baidu Qianfan —
+> 3~4 calls a day, cost is negligible) and add `discover_events.py`.
+> The `discover` prompt already exists in `CoreAssets/Prompts.md`; only the "who searches" layer is missing.
+>
+> Automation without an API is possible, but degrades to B: it will only search subjects who
+> released something today. K-pop and event-driven spikes are essentially missed.
+
+**With no plan file, collection fails loudly (`exit=8`)** instead of guessing.
+Earlier versions silently fell back to "rotate subjects by day of year", burned 40 minutes on
+people with no activity, and produced a digest that looked fine but was empty.
 
 ---
 
-## How it decides
-
-The unit of judgement is the **material**, not the video and not the news event.
+## What the output looks like
 
 ```
-[Seed]  ~100 trending topics -> LLM filters "can this become material?" -> query terms
-   |
-Collect ~400-1900 pieces of content
-   |  extract entities (song names / template skeletons / "XX challenge")
-   |  merge mentions of the same material into one card
-   |  threshold: >=2 videos in-circle, >=3 cross-circle
-   |  domain filter: sports / esports / politics out
-   |  lifespan: a card older than N days steps aside for something new
-Digest: 8 in-circle + 3 cross-circle cards
+## Today's captions (10)
+
+**Collected (3)**
+
+1. You're under arrest!
+   - In use: 4 videos | top 354,000 likes | in-circle 1/4
+
+2. The moment the feather falls, all the noise goes quiet.
+   - In use: 1 video | top 532,000 likes | cross-circle
+
+**Hot list (6)**
+
+1. This everyday makeup deserves to be welded onto my face
+2. The me on stage right now shines
+3. Time passes faster than bullets
+
+## Today's formats (4 | Douyin hot list)
+
+1. Seven days seven colors outfit-change challenge
+2. All-black outfit switch, opened with BIGBANG's new song
 ```
 
-Full criteria live in [`CoreAssets/HotspotCriteria.md`](CoreAssets/HotspotCriteria.md) —
-it is the single source of truth; every threshold in code follows it.
+The two groups differ:
+
+- **Collected** — lines pulled from videos we found, with "how many videos use it" as evidence
+- **Hot list** — lines picked from today's Douyin hot list; platform ranking, no usage count
+
+"In use" means **how many distinct videos used that line**, not a popularity score.
+
+---
+
+## How it runs
+
+```
+1. Agent reconnaissance (in the conversation)
+   Web search -> map to 109 subjects in the keyword library -> write query_plan.json
+   Yields: 12 subjects / 12 songs / 4 formats / 6 seeds (20~34 queries, varies by day)
+        |
+2. Collection (script, CDP to local Edge)
+   One search per query, each with its own time window: songs 5d / subjects 7d / formats 5d
+        |
+3. Judging
+   Extract entities -> merge mentions of the same material into one card
+   Threshold: >=2 in-circle videos, >=3 cross-circle; domain filter (sports/esports/politics out)
+   Lifespan: a card whose heat has not grown for 3 days steps aside
+        |
+4. Render
+   8 in-circle cards + 3 cross-circle -> captions -> formats -> new songs -> candidates
+```
+
+Criteria live in [`CoreAssets/HotspotCriteria.md`](CoreAssets/HotspotCriteria.md) and prompts in
+[`CoreAssets/Prompts.md`](CoreAssets/Prompts.md) — both are single sources of truth; every
+threshold in code follows them.
 
 ---
 
 ## Quick start
 
+### Route A: conversational agent (recommended)
+
 ```bash
 git clone https://github.com/YyizzLL/Trend-Radar.git && cd Trend-Radar
-
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env          # then fill in keys, see below
-# The keyword library ships with the repo (138 subjects). To add or remove people,
-# edit CoreAssets/keywords.json following CoreAssets/keywords.template.md
-
-python scripts/doctor.py      # deps / timezone / keys / port / keywords / data
+cp .env.example .env          # fill RADAR_LLM_KEY
+python scripts/doctor.py      # deps / timezone / keys / port / keyword library
 python scripts/launch_edge.py # starts Edge; scan the QR code to log into Douyin
-python scripts/collect_douyin.py   # collect (try --limit 3 first)
-python -m src.main --run           # judge + render the digest
+```
+
+Then have the agent do reconnaissance in a conversation; it writes
+`data/input/query_plan.json`, after which:
+
+```bash
+python scripts/collect_douyin.py              # collect (reads query_plan.json)
+python -m src.main --run                       # judge + render
+# or in one shot:
+python scripts/daily_run.py --trigger manual --skip-plan
 ```
 
 Output lands in `sandbox/runs/<timestamp>/report.md`.
 
-To run it daily, register the Windows scheduled task
-(09:00 main run + 2 min after logon + 11:30 retry on failure):
+### Route B: scripts only
 
 ```bash
-python scripts/install_task.py        # --query to inspect / --remove / --run-now
+python scripts/plan_queries.py     # plan from hot list / charts / seeds only
+python scripts/collect_douyin.py   # collect
+python -m src.main --run           # judge + render
 ```
 
-> `playwright install` is **not** needed. The collector uses `connect_over_cdp`
-> against an existing browser and never downloads browser binaries.
+No search API needed; coverage is narrower, as described above.
+
+### Scheduled runs
+
+```bash
+python scripts/install_task.py     # 09:00 main run + 2 min after login + 11:30 retry
+```
+
+The scheduled task uses route B. **To get route-A quality unattended, wire in a search API first.**
+
+> `playwright install` is **not** required. This uses `connect_over_cdp` against an existing
+> browser and does not download browser binaries.
 
 ---
 
 ## Prerequisites
 
-**This is not a clone-and-run tool.** Every external service is bring-your-own.
+**This is not a clone-and-run tool.** External services must be provisioned by you.
 
-### 1. Manual steps (nothing works without them)
+### 1. Manual steps
 
-| Item | Notes |
-|------|-------|
-| **Windows + Edge** | Collection uses CDP against a local Edge. Only verified on Windows |
-| **Douyin account** | You must scan the QR code **once** in the Edge window. Session is stored in `.edge-cdp/` and never uploaded |
-| **Edge debug port** | `python scripts/launch_edge.py` starts Edge with `--remote-debugging-port=9222` |
+| Item | Note |
+|---|---|
+| **Windows + Edge** | Collection uses CDP against local Edge; only verified on Windows |
+| **Douyin account** | Log in once by scanning a QR code in the Edge window. Session is stored in `.edge-cdp/` and never uploaded |
+| **Edge debug port** | `python scripts/launch_edge.py` starts Edge on port 9222 |
 
-Sessions expire. If the search page opens but returns nothing, you were probably
-logged out by the mobile app — scan again.
+The session expires. If the search page opens but returns nothing, you were probably kicked off
+by the mobile app — scan again.
 
-### 2. Bring your own API keys
+### 2. API keys you must obtain
 
 | Env var | Purpose | Where | Free tier | If missing |
-|---------|---------|-------|-----------|------------|
-| `RADAR_LLM_KEY` | LLM layer: material understanding + caption review | Any OpenAI-compatible API (DeepSeek / OpenAI / SiliconFlow…) | varies; ~¥0.2/day in our runs | Falls back to rules-only: fewer cards, no caption column |
-| `SANDBASE_API_KEY` | Real BGM behind a video | https://api.sandbase.ai | 100/day, $0.001/call | No "soundtrack" field on cards |
-| `SMTP_USER` | Sender mailbox | QQ Mail | free | Markdown only, no email |
-| `SMTP_PASS` | **App password** (16 chars, not your login password) | QQ Mail → Settings → enable POP3/IMAP/SMTP | free | same as above |
-| `SMTP_TO` | Recipient | your choice | — | defaults to `SMTP_USER` |
-
-Using your QQ login password in `SMTP_PASS` fails with `535 Authentication failed`.
+|---|---|---|---|---|
+| `RADAR_LLM_KEY` | Model layer: material extraction + caption finishing | Any OpenAI-compatible service (DeepSeek / Qwen / SiliconFlow…) | Varies; ~¥0.2/day measured here | Degrades to rules-only: fewer cards, no caption section |
+| `SANDBASE_API_KEY` | Read the real BGM of a video | https://api.sandbase.ai | 100 calls/day | Cards lose the "BGM" field |
+| `SMTP_USER` / `SMTP_PASS` / `SMTP_TO` | Email delivery | QQ Mail (`SMTP_PASS` is an **app password**, not your login password) | Free | Markdown only, no email |
+| (optional) `SEARCH_API_KEY` | **Only needed for full automation**: let scripts search the web | Bocha / Tavily / Baidu Qianfan | Bocha 1000 calls, Tavily 1000/month, Qianfan 100/day | Route B, narrower coverage |
 
 ### 3. Directory conventions
 
-| Path | Create it? | Notes |
-|------|-----------|-------|
-| `.env` | yes | copy from `.env.example` |
-| `CoreAssets/keywords.json` | no | **ships with the repo** (138 subjects); add or remove entries following the template |
-| `data/*` | no | created at runtime |
-| `.edge-cdp/` | no | created on first `launch_edge.py` |
+| Path | Create manually? | Note |
+|---|---|---|
+| `.env` | Yes | Copy from `.env.example` |
+| `CoreAssets/keywords.json` | No | **Ships with the repo** (109 subjects / 42 groups with member lists); edit per the [template](CoreAssets/keywords.template.md) |
+| `data/` subdirectories | No | Created at runtime |
+| `.edge-cdp/` | No | Created by `launch_edge.py`; session written after login |
 
-The keyword file ships with 138 subjects and is the foundation. An empty `subjects` list
-means an empty plan, zero content collected and an empty digest. `python scripts/plan_queries.py`
-is the fastest way to check it.
+The keyword library is the foundation. An empty subject list means an empty plan, zero collected
+items, and an empty digest.
 
 ---
 
@@ -138,74 +199,98 @@ is the fastest way to check it.
 
 ```
 Trend-Radar/
-├── CoreAssets/          criteria + keyword schema (Chinese docs)
-│   ├── AgentRole.md     role, reading order, paths
-│   ├── InputOutput.md   data contract
-│   ├── HotspotCriteria.md   the criteria (wins any conflict)
-│   ├── Ops.md           runbook: daily run, troubleshooting, LLM config
-│   ├── keywords.json    ships with the repo (138 subjects), editable
-│   └── keywords.template.md
+├── CoreAssets/          criteria, prompts, keyword library (single sources of truth)
+│   ├── AgentRole.md     role, read order, work path
+│   ├── InputOutput.md   data contract: input fields, output format
+│   ├── HotspotCriteria.md  judging criteria (wins on conflict)
+│   ├── Prompts.md       every LLM prompt (6 stages; edit here, not in code)
+│   ├── Ops.md           operations manual: runs, troubleshooting, model layers
+│   ├── keywords.template.md  keyword structure and how to fill it
+│   └── keywords.json    ships with the repo (109 subjects)
 │
-├── config/sources.yaml  sources, thresholds, delivery, LLM switches
+├── config/sources.yaml  data sources, thresholds, delivery, model switches
 ├── src/
 │   ├── main.py          CLI entry (--run / --prune / --clean)
-│   ├── constants.py     shared constants + collector exit codes (EXIT_*)
-│   ├── deps.py          dependency manifest (shared by preflight and doctor)
-│   ├── collectors/      Douyin / Bilibili / QQ Music / BGM sampling
-│   ├── normalize/       normalisation, entity extraction, aggregation
-│   ├── judge/           filtering, thresholds, quotas, reuse governance
-│   ├── llm/             optional LLM layer
-│   ├── report/          Markdown rendering + text merge
-│   └── deliver/         email build & send
+│   ├── constants.py     shared constants + exit codes (EXIT_*, single definition)
+│   ├── collectors/      Douyin / Bilibili / QQ Music / hot list / BGM sampling
+│   ├── normalize/       normalization, entity extraction, aggregation, caption candidates
+│   ├── judge/           judging (domain filter, thresholds, quotas, lifespan)
+│   ├── llm/             model layer: material understanding + caption finishing
+│   ├── report/          Markdown digest rendering
+│   └── deliver/         email build, send, archive
 │
 ├── scripts/
-│   ├── daily_run.py     scheduler (lock -> Edge -> plan -> collect -> report -> mail)
-│   ├── doctor.py        environment self-check
-│   ├── launch_edge.py   start Edge with a debug port
-│   ├── install_task.py  register the Windows scheduled task
-│   ├── collect_douyin.py  CDP collector (supports --resume)
-│   ├── collect_seeds.py   trending seeds (optional, non-blocking)
-│   ├── plan_queries.py    build the daily query plan
-│   ├── build_keywords.py  rebuild subject list and profiles
-│   └── probe/           development probes, not required at runtime
+│   ├── daily_run.py     daily entry (lock → Edge → plan → collect → render → send)
+│   ├── doctor.py        environment self-check; run this first when something breaks
+│   ├── launch_edge.py   start Edge with a debug port (QR login happens here)
+│   ├── install_task.py  register a Windows scheduled task
+│   ├── collect_douyin.py  collection (CDP, --resume; fails loudly without a plan)
+│   ├── plan_queries.py  route B: build a plan from day signals
+│   ├── collect_seeds.py trending aggregator, one more input for reconnaissance (optional)
+│   ├── check_prompts.py validate Prompts.md (all stages present, placeholders fillable)
+│   ├── build_keywords.py  rebuild the keyword library
+│   ├── llm_replay.py    offline replay of the model layer
+│   └── probe/           development probes, not needed to run
 │
-├── data/                runtime data (gitignored, skeleton committed)
-└── fixtures/            sanitised samples for offline runs
+├── memory/              daily retrospectives and optimization notes (local, not committed)
+├── data/                runtime data (not committed, skeleton only)
+└── fixtures/            sanitized samples for offline dry runs
 ```
 
 ---
 
-## LLM layer (optional)
+## Model layer (optional)
 
-Two layers are on by default: **material understanding** and **caption review**.
+Two layers are on by default; prompts live in [`CoreAssets/Prompts.md`](CoreAssets/Prompts.md):
 
 | Layer | What it does | Switch |
-|-------|--------------|--------|
-| L2 | Reads ~40 captions per query and recovers song/format names rules miss | `layers.material.enabled` |
-| Caption review | Decides whether a reused phrase works as a caption, and how | `layers.phrase.enabled` |
-| L3 noise review | Flags "high evidence but filtered as noise" cases (rarely fires) | `layers.adjudicate.enabled` |
-| L1 query generation | LLM-suggested queries | not wired into the pipeline |
+|---|---|---|
+| `material` | Reads ~40 captions per query and recovers song/format names rules miss | `layers.material.enabled` |
+| `phrase` | Finishes candidate lines into ready-to-use captions, or drops them | `layers.phrase.enabled` |
 
-The LLM only **extracts** and **reviews**; it never decides. Every card still goes through
-the same thresholds and quotas. Any layer failing degrades silently.
+The model only **extracts** and **finishes**; it never decides. Every card still goes through the
+same thresholds and quotas. Any layer failing degrades silently.
 
-Turn everything off and the project still runs as a rules-only radar.
+Turn everything off and it still runs as a rules-only radar — fewer cards, no caption section.
+
+To change a prompt: edit `CoreAssets/Prompts.md` → run `python scripts/check_prompts.py` → done,
+no Python changes.
 
 ---
 
 ## Known limitations
 
-- **Only verified on Windows + Edge.** No headless or cross-platform support.
-- **Collection coverage is typically 70–98%**, never 100%. Douyin soft-blocks after
-  a few queries; the collector pauses and resumes (`--resume`).
-- **CAPTCHAs happen.** The collector detects them, restarts Edge with a fresh session
-  (up to 2 attempts), and only then stops and alerts.
-- **The web UI does not expose BGM**; real soundtracks come from SandBase, capped daily.
-- **Comments are not collected at all** — comment-section memes are a blind spot.
-- **Cross-circle discovery covers challenges/templates only**, not cross-circle BGM or captions.
-- **You maintain the keyword file.** Subject lists and aliases go stale.
-- **Formats have a shelf life.** Cards older than the configured lifespan step aside,
-  which is intentional — a radar that repeats itself is not a radar.
+- **Reconnaissance depends on a conversational agent.** No conversation, no new plan; the
+  scheduled task falls back to route B (narrow coverage).
+- **No search API means no true unattended operation.**
+- **Only verified on Windows + Edge**; no headless or cross-platform support.
+- **Collection coverage is not 100%.** Douyin soft-blocks after 3~9 queries per window; wait and
+  `--resume`.
+- **Captchas happen.** The script detects them and restarts Edge for a new session (2 attempts).
+- **Douyin's web page does not expose BGM**; real tracks come from a second SandBase query.
+- **Comments are not collected at all.**
+- **For rewritten captions, "in use N" only applies to the original line** — it is a heat signal,
+  not a chain of evidence.
+- The keyword library needs maintenance; names and aliases go stale.
+
+---
+
+## Version
+
+**v0.5.0** (2026-11-25)
+
+Highlights:
+
+- **Signal-driven retrieval + agent reconnaissance**: no more rotating subjects by region/date.
+  K-pop cards went from 0 to 6; queries 48 → 20~34; collection 44 → 15~20 minutes.
+- **Captions are delivered finished**: the use/watch/skip classification and the "watching" bucket
+  are gone; the model completes the line or drops it, with an overlap check to stop rewriting.
+- **Hot-list channel**: hot-list captions merged into today's captions; noise 37% → 0.
+- **Prompts are document-driven**: `CoreAssets/Prompts.md` is the single source.
+- **No silent fallback**: missing plan = `exit=8`.
+- Dead code removed: ~1200 lines net, `ruff` clean.
+
+Older history: `git log` and [`CHANGELOG.md`](CHANGELOG.md). Daily retrospectives live in the local `memory/` folder (not committed).
 
 ---
 
@@ -213,13 +298,15 @@ Turn everything off and the project still runs as a rules-only radar.
 
 For personal study and technical research only.
 
-- Respect the target site's `robots.txt` and terms of service; keep request rates low.
-- Copyright of collected content belongs to its authors. This project only structures
-  metadata and stores no audio or video.
-- Use at your own risk.
+- Respect `robots.txt` and the terms of service of any site you collect from; keep request rates low.
+- Copyright of collected content belongs to its authors; this project only structures text and
+  stores no audio or video.
+- You are responsible for any consequences of using this project.
 
 ---
 
 ## License
 
-[MIT](LICENSE). Keep the copyright and licence notice.
+[MIT](LICENSE) — free to use, modify and distribute, including commercially.
+
+The only requirement: keep the copyright and license notice.

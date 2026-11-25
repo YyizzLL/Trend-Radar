@@ -111,11 +111,6 @@ def _noise_reason(
     return ""
 
 
-def _key(mat: Material) -> str:
-    """模型裁决的键：归一名 + 类型。改名/换类型就不算同一条。"""
-    return f"{_norm(mat.name)}|{mat.mtype}"
-
-
 def judge_materials(
     materials: list[Material],
     *,
@@ -133,38 +128,16 @@ def judge_materials(
     lifespan: dict[str, int] | None = None,
     chart_lifespan: dict[str, int] | None = None,
     chart_rank_cap: int = 15,
-    llm_verdicts: dict[str, str] | None = None,
 ) -> list[Material]:
-    """`llm_verdicts` 是模型复核结果（键见 `_key`）：只有 keep / drop 两种。
-
-    - `keep`：免除噪声判定，让高证据素材不被词表误伤
-    - `drop`：模型确认它确实属于无关领域，直接判死
-
-    只影响「噪声判定」这一处，不改排序、不改门槛、不改配额。
-    """
-    verdicts = llm_verdicts or {}
     for mat in materials:
-        vkey = _key(mat)
-        verdict = verdicts.get(vkey, "")
-
-        # 模型主张丢弃：直接判死，理由带上规则原来的判断
-        if verdict == "drop":
-            mat.cls = "丢弃"
-            mat.llm_verdict = "drop"
-            mat.reason = f"模型复核：与追星二创无关（原判 {mat.reason or '候选'}）"
-            continue
-
         # 榜单 + 圈内的歌不参与噪声判定：它是「你关注的人发了什么新歌」，
         # 不该因为某条抖音文案里出现「淘汰」「电竞」这类词被丢掉（2026-11-09 SUPERSTAR）。
-        exempt = (mat.from_chart and mat.circle == CIRCLE_IN) or verdict == "keep"
+        exempt = mat.from_chart and mat.circle == CIRCLE_IN
         noise = "" if exempt else _noise_reason(mat.name, mat.samples, extra_noise)
         if noise:
             mat.cls = "丢弃"
             mat.reason = noise
             continue
-        if verdict == "keep":
-            mat.llm_verdict = "keep"
-
         mat.circle = mat.circle or CIRCLE_OUT
 
         # 活动合集不是玩法：只有一堆视频挂着同一个标签，抽不出可复制的动作
@@ -254,15 +227,10 @@ def judge_materials(
         if mat.cls == "热点" and info:
             streak = int(info.get("streak") or 0)
             last_mentions = int(info.get("last_mentions") or 0)
-            last_rank = int(info.get("last_rank") or 0)
             peak = int(info.get("peak_mentions") or 0)
             growth = (mat.mentions - last_mentions) / max(1, last_mentions)
             # 腰斩也算衰退：只看相邻两天的 20%，抓不到「慢慢掉一半」的卡
             halved = peak > 0 and mat.mentions < peak * 0.6
-            rank_up = bool(
-                mat.from_chart and last_rank and mat.chart_rank
-                and mat.chart_rank < last_rank
-            )
             mat.repeat_days = streak + 1
             # 榜单歌不按「计数涨没涨」判断衰退：覆盖度波动会让 mentions 假性下跌
             # （今天 25/33 个查询，NEON 从 46 掉到 26，但它在榜仍是 #3）。

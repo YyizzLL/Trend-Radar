@@ -53,24 +53,14 @@ def strip_proxy_for_localhost() -> list[str]:
     os.environ["no_proxy"] = "127.0.0.1,localhost,::1"
     return removed
 
-from src.collectors.qq_music import fetch as fetch_chart  # noqa: E402
-from src.config import (  # noqa: E402
-    alias_map,
-    keyword_layer,
-    load_sources,
-    subject_profiles,
-)
+from src.config import load_sources  # noqa: E402
 from src.constants import (  # noqa: E402
     EXIT_EDGE,
     EXIT_LOGIN,
+    EXIT_NO_PLAN,
     EXIT_PAGE,
     EXIT_VERIFY,
-    TYPE_QUERY,
 )
-from src.judge.anchor import context as anchor_context  # noqa: E402
-from src.judge.anchor import match_subject  # noqa: E402
-
-KEYWORDS = ROOT / "CoreAssets" / "keywords.json"
 OUT = ROOT / "data" / "input" / "douyin_latest.json"
 PLAN = ROOT / "data" / "input" / "query_plan.json"
 
@@ -433,54 +423,6 @@ def load_plan() -> tuple[list[dict], int]:
     return queries, scroll
 
 
-def legacy_queries(cfg: dict) -> list[dict]:
-    """没有计划文件时的兜底：主体轮转 + 模板词 + 榜单歌名。"""
-    subjects_n = int(cfg.get("subjects", 2))
-    templates = str(cfg.get("templates", "转场挑战"))
-    from_chart = int(cfg.get("chart_songs", 8))
-
-    kw = json.loads(KEYWORDS.read_text(encoding="utf-8"))
-    profiles = subject_profiles(kw)
-    subjects = [
-        s for s in keyword_layer(kw, "锚点层", "主体")
-        if profiles.get(s, {}).get("weight", 1.0) >= 0.3
-    ]
-    day = datetime.now().timetuple().tm_yday
-    picked = ([subjects[(day * subjects_n + i) % len(subjects)] for i in range(subjects_n)]
-              if subjects else [])
-
-    out: list[dict] = []
-    for i, name in enumerate(picked):
-        quals = TYPE_QUERY.get(profiles.get(name, {}).get("type", ""))
-        text = f"{name} {quals[i % len(quals)]}" if quals else name
-        out.append({"q": text, "type": "主体", "reason": "轮转", "priority": 0.5})
-    out += [{"q": t.strip(), "type": "模板", "reason": "配置", "priority": 0.5}
-            for t in templates.split(",") if t.strip()]
-
-    if from_chart > 0:
-        amap = alias_map(kw)
-        judge_cfg = load_sources().get("judge", {}) or {}
-        ctx = anchor_context(kw, judge_cfg)
-        qcfg = load_sources().get("sources", {}).get("qq_music", {})
-        try:
-            songs = fetch_chart([str(c) for c in (qcfg.get("charts") or ["27"])],
-                                max_rank=int(qcfg.get("max_rank", 30)),
-                                qps_ms=int(qcfg.get("qps_ms", 800)))["songs"]
-        except Exception:  # noqa: BLE001
-            songs = []
-        got = 0
-        for song in songs:
-            artist = "、".join(song.get("artists") or [])
-            # 与判定层同一套规则：单字别名 / 3 字英文别名 / 歧义主体都不算命中
-            if not match_subject(artist, subjects, amap, **ctx):
-                continue
-            out.append({"q": song["name"], "type": "歌名", "reason": "榜单", "priority": 1.0})
-            got += 1
-            if got >= from_chart:
-                break
-    return out
-
-
 def _pause(page, seconds: float, keyword: str) -> None:
     """退避等待；页签在这期间死掉要转成 PageLost，不能冒泡成 exit=1。"""
     try:
@@ -662,14 +604,17 @@ def main() -> int:
     )
 
     plan, plan_scroll = load_plan()
-    if plan:
-        all_queries = plan
-        scroll = args.scroll or plan_scroll or int(dcfg.get("scroll", 5))
-        source = "plan"
-    else:
-        all_queries = legacy_queries(dcfg)
-        scroll = args.scroll or int(dcfg.get("scroll", 2))
-        source = "legacy"
+    if not plan:
+        # 2026-11-25：旧版这里会静默回退到「按日期取模轮转」，
+        # 花 40 分钟搜一堆当天没活动的主体，还产出一份看着正常的空日报。
+        # 轮转是负价值，改成直接报错——至少能立刻看出「今天没做侦察」。
+        print(f"✗ 没有检索计划：{PLAN} 不存在或为空")
+        print("  采集只执行既定计划，不会自己决定搜谁。")
+        print("  先跑侦察：agent 生成，或 python scripts/plan_queries.py")
+        raise SystemExit(EXIT_NO_PLAN)
+    all_queries = plan
+    scroll = args.scroll or plan_scroll or int(dcfg.get("scroll", 5))
+    source = "plan"
     # --limit 只限制「本轮跑几个」，计划名单仍用全量：
     # 否则 --limit + --resume 会把不在前 N 个里的历史记录当成「旧计划」丢掉。
     queries = all_queries[: args.limit] if args.limit else all_queries
@@ -754,6 +699,9 @@ def main() -> int:
         empty_cooldowns = 0
         for idx, item in enumerate(pending):
             keyword = item["q"]
+            # 每条查询可以带自己的时间窗：歌名 5 天 / 主体 7 天 / 玩法 5 天。
+            # 目的是「知道它存在」，不是反复看见同一个东西（2026-11-23）。
+            searcher.days = int(item.get("publish_time") or days)
             if idx and not args.no_delay:
                 time.sleep(random.uniform(delay_min, delay_max))
 

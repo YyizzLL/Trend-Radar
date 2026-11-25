@@ -16,6 +16,17 @@ from typing import Any
 # 这些别名本身是普通词（十七 / 四代 / 三代），只有写成 #话题 才认
 AMBIGUOUS_ALIASES = {"十七", "四代", "三代", "十八楼"}
 
+# 成员艺名里混着大量常用英文词/人名，裸子串匹配会大面积误判：
+#   `stella` 命中 `stellar`、`moon` 命中 `moonlight`、`young` 命中 `younger`、
+#   `winter` 命中冬季文案、`sora` 命中 OpenAI Sora。
+# 这些名字只有写成 #话题（#Ella / #Winter）才算命中该成员所属团体。
+# 判断口径：这个词在普通英文文本里会自然出现，且不是该成员的强标识。
+# 未列入的长专名（Seonghyeon / Yoonchae / Chanelle Moon）保留裸匹配。
+AMBIGUOUS_MEMBERS = {
+    "james", "martin", "ella", "anna", "moon", "young", "hana",
+    "merci", "stella", "sophia", "athena", "winter", "sora",
+}
+
 # C 档（大众情怀型）不算圈内：一条用周杰伦 BGM 的剪辑，不该把圈内素材挤掉
 MIN_WEIGHT = 0.3
 
@@ -79,6 +90,9 @@ def match_subject(
 
     for member, group in members.items():
         if not _accept(member):
+            continue
+        # 高歧义英文艺名：必须带 #话题，否则 "stellar" 会被认成 KATSEYE 的 Ella
+        if member.lower() in AMBIGUOUS_MEMBERS and f"#{member.lower()}" not in low:
             continue
         if profiles.get(group, {}).get("weight", 1.0) < MIN_WEIGHT:
             continue

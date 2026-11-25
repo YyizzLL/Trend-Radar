@@ -19,18 +19,16 @@ import argparse
 import json
 import sys
 import time
-from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.config import alias_map, keyword_layer, load_keywords, load_sources  # noqa: E402
-from src.llm import adjudicate as llm_adjudicate  # noqa: E402
 from src.llm import context as llm_context  # noqa: E402
 from src.llm import material as llm_material  # noqa: E402
 from src.llm import prompts as llm_prompts  # noqa: E402
-from src.llm.client import LLM, probe  # noqa: E402
+from src.llm.client import probe  # noqa: E402
 from src.models import Candidate, EntityHit, Material  # noqa: E402
 from src.normalize import entity  # noqa: E402
 from src.normalize.aggregate import aggregate  # noqa: E402
@@ -91,7 +89,7 @@ def _dry_material(cands: list[Candidate], max_items: int, min_items: int, max_ca
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", default="", help="运行目录名，缺省用最新一轮")
-    ap.add_argument("--layer", default="both", choices=["both", "material", "adjudicate"])
+    ap.add_argument("--layer", default="material", choices=["material"])
     ap.add_argument("--dry", action="store_true", help="不调模型，只估算调用量与成本")
     ap.add_argument("--limit", type=int, default=0, help="覆盖 L2 的 max_calls")
     args = ap.parse_args()
@@ -118,13 +116,6 @@ def main() -> int:
             int(mat_layer.get("min_items", 3)),
             args.limit or int(mat_layer.get("max_calls", 30)),
         )
-        picked = llm_adjudicate.conflicts(
-            mats,
-            extra_noise=[],
-            min_evidence=int((layers.get("adjudicate", {}) or {}).get("min_evidence", 3)),
-            limit=int((layers.get("adjudicate", {}) or {}).get("max_calls", 25)),
-        )
-        print(f"\n[dry] L3：{len(picked)} 个「高证据却被判噪声」的矛盾样本（1 次调用）")
         return 0
 
     llm = probe(llm_cfg)     # 手动回放不占用生产开关：enabled 只管每天的正式跑批
@@ -203,26 +194,6 @@ def main() -> int:
                        ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-    # ---------------- L3 ----------------
-    # 注意：L3 的判据已改成「高证据 + 被判噪声」的矛盾检测，
-    # 它读的是 recomputed 的噪声理由，不读 materials.json 里的 cls ——
-    # 所以用修复后的数据跑，结果通常是 0 个（词表已经修好了）。
-    # 想复现 11-09 的误判，要用旧词表，见 sandbox 里的单测。
-    if args.layer in {"both", "adjudicate"} and mats:
-        verdicts = llm_adjudicate.review(
-            llm,
-            mats,
-            extra_noise=[],
-            min_evidence=int((layers.get("adjudicate", {}) or {}).get("min_evidence", 3)),
-            limit=int((layers.get("adjudicate", {}) or {}).get("max_calls", 25)),
-        )
-        report["adjudicate"] = {"stats": verdicts.stats, "detail": verdicts.detail}
-        print(f"\n== L3 结果 ==")
-        print(f"矛盾样本 {verdicts.stats.get('picked', 0)}｜"
-              f"keep {len(verdicts.keep)}｜drop {len(verdicts.drop)}")
-        for a in verdicts.alerts:
-            print(f"  ⚠️ 疑似误伤：{a['name']}（{a['mentions']} 条，{a['noise_reason']}）")
 
     (out_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"

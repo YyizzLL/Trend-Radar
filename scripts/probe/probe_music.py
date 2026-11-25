@@ -22,9 +22,6 @@ except ImportError:  # 按模块方式运行时的回退
 strip_proxy_for_localhost()
 
 
-TARGET_HINTS = ("aweme/detail", "aweme/v1/web/aweme", "music")
-
-
 def main() -> int:
     if len(sys.argv) < 2:
         print("用法：python scripts/probe_music.py <aweme_id>")

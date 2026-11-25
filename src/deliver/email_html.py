@@ -19,6 +19,7 @@ import html
 from typing import Any
 
 from ..report.evidence import count_phrase
+from ..report.textmerge import related
 from .digest import Digest
 
 # 配色：浅色底 + 深色字，避免深色模式反转后对比度不足
@@ -50,14 +51,6 @@ def _link(url: str, label: str) -> str:
     return (
         f'<a href="{_e(url)}" target="_blank" '
         f'style="color:{ACCENT2};text-decoration:none;font-size:13px">{_e(label)}</a>'
-    )
-
-
-def _td(content: str, *, width: str = "", align: str = "left", pad: str = "10px 0") -> str:
-    return (
-        f'<td class="cell" width="{width}" align="{align}" '
-        f'style="padding:{pad};vertical-align:top;font-size:14px;color:{TEXT};'
-        f'line-height:1.55">{content}</td>'
     )
 
 
@@ -104,7 +97,13 @@ def _material_block(items: list[dict[str, Any]], accent: str) -> str:
             )
         bgm = ""
         if m.get("bgm"):
-            src = "推断" if m.get("bgm_source") == "inferred" else "接口"
+            # 「@xxx创作的原声」不再当占位丢掉，但也不能冒充歌名：
+            # 如实告诉用户这是作者上传的音频，让他自己去平台搜（2026-11-25）
+            src = (
+                "作者原声，建议验证"
+                if "创作的原声" in str(m.get("bgm"))
+                else ("推断" if m.get("bgm_source") == "inferred" else "接口")
+            )
             bgm = (
                 f'<div style="font-size:12px;color:{MUTED};padding-top:2px">'
                 f"配乐 {_e(m['bgm'])}（{src}）</div>"
@@ -161,55 +160,38 @@ def _refs_block(refs: list[dict[str, Any]]) -> str:
     )
 
 
-def _cluster_block(clusters: list[dict[str, Any]]) -> str:
-    if not clusters:
-        return _empty("今日没有成簇的文案")
-    blocks: list[str] = []
-    for i, c in enumerate(clusters, 1):
-        rep = _e(c.get("rep", ""))
-        size = int(c.get("size") or 0)
-        likes = int(c.get("likes_max") or 0)
-        median = int(c.get("likes_median") or 0)
-        tags = " ".join(f"#{_e(t)}" for t in (c.get("tags") or [])[:5])
-        variants = [v for v in (c.get("variants") or [])[1:4] if v and v != c.get("rep")]
-        links = " &nbsp;".join(
-            _link(m["url"], f"看{j}")
-            for j, m in enumerate((c.get("members") or [])[:3], 1)
-            if m.get("url")
-        )
-        extra = ""
-        if variants:
-            extra += (
-                f'<div style="font-size:12px;color:{MUTED};padding-top:4px">'
-                f"变体：{_e('；'.join(variants))}</div>"
-            )
-        if tags:
-            extra += (
-                f'<div style="font-size:12px;color:{MUTED};padding-top:2px">'
-                f"{_e(tags)}</div>"
-            )
-        if links:
-            extra += f'<div style="padding-top:6px">{links}</div>'
-        blocks.append(
-            f'<div style="padding:12px 0;border-bottom:1px solid {LINE}">'
-            f'<div style="font-size:15px;font-weight:700;line-height:1.5;color:{TEXT}">'
-            f"{i}. 「{rep}」</div>"
-            f'<div style="font-size:12px;color:{MUTED};padding-top:4px">'
-            f"规模 {size} 条 ｜ 最高 {likes:,} 赞 ｜ 中位 {median:,}</div>"
-            f"{extra}</div>"
-        )
-    return "".join(blocks)
+def _play_block(items: list[str]) -> str:
+    """今日玩法：热榜里能照着做的形态。文案已并进「今日文案」，这里只放玩法。"""
+    items = [x for x in (items or []) if x]
+    if not items:
+        return _empty("今日热榜没有可用玩法")
+    rows = "".join(
+        f'<div style="font-size:14px;color:{TEXT};line-height:1.75;padding:1px 0">'
+        f"{i}. {_e(x)}</div>"
+        for i, x in enumerate(items, 1)
+    )
+    return rows
 
 
-def _text_block(entries: list[dict[str, Any]]) -> str:
-    """今日文案：整句簇 + 短语对齐后的一份名单（每句只出现一次）。"""
-    usable = [e for e in entries if e.get("use") == "use"]
-    watch = [e for e in entries if e.get("use") == "watch"]
-    if not usable and not watch:
+def _text_block(entries: list[dict[str, Any]], hot_copy: list[str] | None = None) -> str:
+    """今日文案：采集成品 + 热榜句子，合成一栏，两组分开。
+
+    采集版带「在用 N 条」这类证据，热榜版只有平台排序——两者信息量不同，
+    所以不混排，但放在同一栏里，用户不用来回对照（2026-11-25）。
+    """
+    hot_copy = [t for t in (hot_copy or []) if t]
+    if not entries and not hot_copy:
         return _empty("今日没有可用的文案")
 
+    def _label(text: str) -> str:
+        return (
+            f'<div style="font-size:12px;color:{MUTED};padding:10px 0 2px">{text}</div>'
+        )
+
     parts: list[str] = []
-    for i, e in enumerate(usable, 1):
+    if entries:
+        parts.append(_label(f"采集（{len(entries)} 条）"))
+    for i, e in enumerate(entries, 1):
         videos = int(e.get("videos") or 0)
         size = int(e.get("size") or 0)
         nums = f"在用 {videos} 条" + (f"（整句 {size}）" if size else "")
@@ -222,22 +204,10 @@ def _text_block(entries: list[dict[str, Any]]) -> str:
             nums += " ｜ 常青老梗"
 
         extra = ""
-        if e.get("usage"):
-            extra += (
-                f'<div style="font-size:13px;color:{TEXT};padding-top:4px;line-height:1.5">'
-                f'{_e(e["usage"])}</div>'
-            )
-        meta = " · ".join(_e(x) for x in (e.get("source"), e.get("bgm")) if x)
-        if meta:
-            extra += f'<div style="font-size:11px;color:{MUTED};padding-top:3px">{meta}</div>'
-        variants = [
-            v for v in dict.fromkeys(e.get("variants") or [])
-            if v and v != e.get("text")
-        ][:3]
-        if variants:
+        if e.get("bgm"):
             extra += (
                 f'<div style="font-size:11px;color:{MUTED};padding-top:3px">'
-                f'变体：{_e("；".join(variants))}</div>'
+                f'配套 {_e(e["bgm"])}</div>'
             )
         links = " &nbsp;".join(
             _link(m["url"], f"看{j}")
@@ -255,19 +225,14 @@ def _text_block(entries: list[dict[str, Any]]) -> str:
             f"{extra}</div>"
         )
 
-    if watch:
-        rows = "".join(
-            f'<div style="font-size:13px;color:{TEXT};padding-top:6px;line-height:1.5">'
-            f'「{_e(e.get("text"))}」'
-            f'<span style="color:{MUTED};font-size:12px"> · {int(e.get("videos") or 0)} 条'
-            + (f' · {_e(e.get("usage"))}' if e.get("usage") else "")
-            + "</span></div>"
-            for e in watch
-        )
+    if hot_copy:
+        parts.append(_label(f"热榜（{len(hot_copy)} 条）"))
         parts.append(
-            f'<div style="padding:12px 0">'
-            f'<div style="font-size:12px;color:{MUTED};padding-bottom:2px">'
-            f"观察中（需要改写或只适合特定画面）</div>{rows}</div>"
+            "".join(
+                f'<div style="font-size:14px;color:{TEXT};line-height:1.6;padding:2px 0">'
+                f"{i}. {_e(x)}</div>"
+                for i, x in enumerate(hot_copy, 1)
+            )
         )
     return "".join(parts)
 
@@ -291,77 +256,6 @@ def _song_table(news: list[dict[str, Any]]) -> str:
     return (
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'style="border-collapse:collapse">{"".join(rows)}</table>'
-    )
-
-
-def _phrase_table(phrases: list[dict[str, Any]]) -> str:
-    if not phrases:
-        return _empty("今日未发现被 ≥3 条不同视频共同使用的短句")
-    rows: list[str] = []
-    for p in phrases:
-        sample = str(p.get("sample") or "")[:46]
-        rows.append(
-            f'<tr><td class="cell" width="62%" style="padding:8px 8px 8px 0;text-align:left;'
-            f'border-bottom:1px solid {LINE};vertical-align:top">'
-            f'<div style="font-size:14px;font-weight:600;color:{TEXT}">'
-            f'{_e(p.get("phrase"))}</div>'
-            f'<div style="font-size:12px;color:{MUTED};padding-top:2px">'
-            f'{_e(sample)}</div></td>'
-            f'<td class="cell r" width="38%" align="right" style="padding:8px 0;'
-            f'border-bottom:1px solid {LINE};vertical-align:top;font-size:12px;'
-            f'color:{MUTED}">{int(p.get("videos") or 0)} 条 · '
-            f'{int(p.get("likes_max") or 0):,} 赞</td></tr>'
-        )
-    return (
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-collapse:collapse">{"".join(rows)}</table>'
-    )
-
-
-def _phrase_eval_table(rows: list[dict[str, Any]]) -> str:
-    """可用文案：左边原句 + 用法，右边条数 + 配套素材。"""
-    if not rows:
-        return _empty("今日没有判断为可直接套用的句子")
-    cells: list[str] = []
-    for p in rows:
-        usage = str(p.get("usage") or "")
-        source = str(p.get("source") or "")
-        bgm = str(p.get("bgm") or "")
-        meta_bits = [b for b in (source, bgm) if b]
-        tag = "可直接用" if p.get("use") == "use" else "需改写"
-        tag_color = ACCENT if p.get("use") == "use" else MUTED
-        # 来源：圈内 N/M 条；全 0 就标「跨圈」，让人知道这句不是追星圈在用
-        hits = p.get("circle_hits")
-        src_note = ""
-        if isinstance(hits, int):
-            src_note = "跨圈" if hits == 0 else f"圈内 {hits} 条"
-        days = p.get("first_seen_days")
-        if isinstance(days, int) and days >= 14:
-            src_note = (src_note + " · " if src_note else "") + "常青老梗"
-        cells.append(
-            f'<tr><td class="cell" width="66%" style="padding:10px 8px 10px 0;text-align:left;'
-            f'border-bottom:1px solid {LINE};vertical-align:top">'
-            f'<div style="font-size:15px;font-weight:600;color:{TEXT};line-height:1.45">'
-            f'{_e(p.get("phrase"))}</div>'
-            f'<div style="font-size:12px;color:{MUTED};padding-top:3px;line-height:1.5">'
-            f'{_e(usage)}</div>'
-            + (
-                f'<div style="font-size:11px;color:{MUTED};padding-top:3px">'
-                f'{" · ".join(_e(b) for b in meta_bits)}</div>'
-                if meta_bits else ""
-            )
-            + f'</td>'
-            f'<td class="cell r" width="34%" align="right" style="padding:10px 0;'
-            f'border-bottom:1px solid {LINE};vertical-align:top;font-size:12px;'
-            f'color:{MUTED}">'
-            f'<span style="color:{tag_color};font-weight:600">{tag}</span><br>'
-            f'{int(p.get("videos") or 0)} 条在用'
-            + (f' · {_e(src_note)}' if src_note else "")
-            + '</td></tr>'
-        )
-    return (
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-collapse:collapse">{"".join(cells)}</table>'
     )
 
 
@@ -391,7 +285,7 @@ def _summary(d: Digest) -> str:
         ("圈内素材", c["circle"], ACCENT),
         ("跨圈模板", c["cross"], ACCENT2),
         ("今日新歌", c["chart_news"], TEXT),
-        ("文案模板", c["clusters"], TEXT),
+        ("今日文案", len(d.text_entries), TEXT),
     ]
     tds = "".join(
         f'<td class="cell" width="25%" align="center" style="padding:12px 4px">'
@@ -454,6 +348,16 @@ def render_html(d: Digest, *, limits: dict[str, int] | None = None) -> str:
 
 
 def _render(d: Digest) -> str:
+    hb = d.hotboard or {}
+    hot_copy = [x for x in (hb.get("文案") or []) if x]
+    hot_play = [x for x in (hb.get("玩法") or []) if x]
+    # 已在采集结果里出现的热榜句不重复：采集版带「在用」证据，信息更多
+    if d.text_entries and hot_copy:
+        hot_copy = [
+            t for t in hot_copy
+            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
+        ]
+
     body = "".join(
         [
             _section("圈内素材（追星垂直）", len(d.circle), _material_block(d.circle, ACCENT)),
@@ -466,11 +370,16 @@ def _render(d: Digest) -> str:
             _section("取用参考", len(d.refs), _refs_block(d.refs)),
             _section(
                 "今日文案",
-                len(d.text_entries),
-                _text_block(d.text_entries),
-                note="「在用」是提到这句话的内容数，「整句」是几乎一字不差照抄的条数。",
-            ) if d.text_entries else
-            _section("复用短语（文案梗线索）", len(d.phrases), _phrase_table(d.phrases)),
+                len(d.text_entries) + len(hot_copy),
+                _text_block(d.text_entries, hot_copy),
+                note="采集版带「在用」证据，热榜版只有平台热度。",
+            ) if (d.text_entries or hot_copy) else "",
+            _section(
+                "今日玩法（抖音热榜）",
+                len(hot_play),
+                _play_block(hot_play),
+                note="能照着做的形态：变装、转场、卡点、连拍、换装。",
+            ) if hot_play else "",
             _section("今日新歌（你关注的主体）", len(d.chart_news), _song_table(d.chart_news)),
             _section(
                 "候选素材",
@@ -560,7 +469,11 @@ def render_text(d: Digest) -> str:
             if m.get("variants"):
                 line += f"｜别名 {'、'.join(m['variants'])}"
             if m.get("bgm"):
-                src = "推断" if m.get("bgm_source") == "inferred" else "接口"
+                src = (
+                    "作者原声，建议验证"
+                    if "创作的原声" in str(m.get("bgm"))
+                    else ("推断" if m.get("bgm_source") == "inferred" else "接口")
+                )
                 line += f"｜配乐 {m['bgm']}（{src}）"
             lines.append(line)
         lines.append("")
@@ -577,36 +490,43 @@ def render_text(d: Digest) -> str:
         lines.append("（今日无）")
     lines.append("")
 
-    if d.text_entries:
-        lines.append(f"== 今日文案（{len(d.text_entries)}）==")
-        for i, e in enumerate(d.text_entries, 1):
-            tag = "可直接用" if e.get("use") == "use" else "需改写"
-            nums = f"{int(e.get('videos') or 0)} 条"
-            if e.get("size"):
-                nums += f"（整句 {int(e['size'])}）"
-            hits = e.get("circle_hits")
-            src_note = ""
-            if isinstance(hits, int):
-                src_note = " · 跨圈" if hits == 0 else f" · 圈内 {hits} 条"
-            days = e.get("days")
-            if isinstance(days, int) and days >= 14:
-                src_note += " · 常青老梗"
-            lines.append(f"{i}. 「{e.get('text')}」{nums} ({tag}{src_note})")
-            if e.get("usage"):
-                lines.append(f"   怎么用：{e['usage']}")
-            meta = " · ".join(x for x in (e.get("source"), e.get("bgm")) if x)
-            if meta:
-                lines.append(f"   {meta}")
+    hb = d.hotboard or {}
+    hot_copy = [x for x in (hb.get("文案") or []) if x]
+    hot_play = [x for x in (hb.get("玩法") or []) if x]
+    if d.text_entries and hot_copy:
+        hot_copy = [
+            t for t in hot_copy
+            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
+        ]
+
+    if d.text_entries or hot_copy:
+        lines.append(f"== 今日文案（{len(d.text_entries) + len(hot_copy)}）==")
+        if d.text_entries:
+            lines.append("[采集]")
+            for i, e in enumerate(d.text_entries, 1):
+                nums = f"{int(e.get('videos') or 0)} 条"
+                if e.get("size"):
+                    nums += f"（整句 {int(e['size'])}）"
+                hits = e.get("circle_hits")
+                src_note = ""
+                if isinstance(hits, int):
+                    src_note = " · 跨圈" if hits == 0 else f" · 圈内 {hits} 条"
+                days = e.get("days")
+                if isinstance(days, int) and days >= 14:
+                    src_note += " · 常青老梗"
+                lines.append(f"{i}. 「{e.get('text')}」{nums}{src_note}")
+                if e.get("bgm"):
+                    lines.append(f"   配套：{e['bgm']}")
+        if hot_copy:
+            lines.append("[热榜]")
+            for i, x in enumerate(hot_copy, 1):
+                lines.append(f"  {i}. {x}")
         lines.append("")
-    else:
-        lines.append(f"== 复用短语（{len(d.phrases)}）==")
-        for p in d.phrases:
-            lines.append(
-                f"- {p.get('phrase')}：{int(p.get('videos') or 0)} 条，"
-                f"最高 {int(p.get('likes_max') or 0):,} 赞"
-            )
-        if not d.phrases:
-            lines.append("（今日无）")
+
+    if hot_play:
+        lines.append(f"== 今日玩法（抖音热榜，{len(hot_play)}）==")
+        for i, x in enumerate(hot_play, 1):
+            lines.append(f"{i}. {x}")
         lines.append("")
 
     lines.append(f"== 今日新歌（{len(d.chart_news)}）==")
