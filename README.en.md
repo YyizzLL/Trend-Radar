@@ -277,20 +277,8 @@ no Python changes.
 
 ## Version
 
-**v0.5.0** (2026-11-25)
-
-Highlights:
-
-- **Signal-driven retrieval + agent reconnaissance**: no more rotating subjects by region/date.
-  K-pop cards went from 0 to 6; queries 48 → 20~34; collection 44 → 15~20 minutes.
-- **Captions are delivered finished**: the use/watch/skip classification and the "watching" bucket
-  are gone; the model completes the line or drops it, with an overlap check to stop rewriting.
-- **Hot-list channel**: hot-list captions merged into today's captions; noise 37% → 0.
-- **Prompts are document-driven**: `CoreAssets/Prompts.md` is the single source.
-- **No silent fallback**: missing plan = `exit=8`.
-- Dead code removed: ~1200 lines net, `ruff` clean.
-
-Older history: `git log` and [`CHANGELOG.md`](CHANGELOG.md). Daily retrospectives live in the local `memory/` folder (not committed).
+Current: **v0.5.0** (2026-11-25). See [`CHANGELOG.md`](CHANGELOG.md) for history.
+Daily retrospectives live in the local `memory/` folder (not committed).
 
 ---
 
