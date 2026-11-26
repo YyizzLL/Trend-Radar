@@ -1,6 +1,6 @@
 # 二创热点雷达
 
-> English version: [`README.en.md`](README.en.md) ｜ 当前版本：**v0.5.0**
+> English version: [`README.en.md`](README.en.md) ｜ 当前版本：**v0.5.1**
 
 每天扫一遍抖音，回答一个问题：**今天有什么东西可以直接拿来剪视频。**
 
@@ -287,7 +287,7 @@ Trend-Radar/
 
 ## 版本
 
-当前 **v0.5.0**（2026-11-25）。变更历史见 [`CHANGELOG.md`](CHANGELOG.md)；
+当前 **v0.5.1**（2026-11-26）。变更历史见 [`CHANGELOG.md`](CHANGELOG.md)；
 每日复盘在本地 `memory/` 目录（不入库）。
 
 ---

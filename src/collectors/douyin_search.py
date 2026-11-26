@@ -1,6 +1,6 @@
 """抖音搜索结果读取。
 
-采集由 Agent 用浏览器完成（见 CoreAssets/PlatformSources.md），
+采集由 CDP 驱动 Edge 浏览器完成（数据契约见 CoreAssets/InputOutput.md），
 落成 JSON 后由本模块转成候选对象。脚本不直接驱动浏览器。
 
 输入格式：
@@ -85,10 +85,11 @@ def load(path: Path, *, now: datetime) -> tuple[list[Candidate], dict[str, Any]]
     failed_attempts = sum(1 for q in queries if q.get("error"))
     if plan_names:
         planned = len(plan_names)
-        ok_q = sum(
-            1 for q in queries
+        ok_q = len({
+            str(q.get("q", "")).lower()
+            for q in queries
             if not q.get("error") and str(q.get("q", "")).lower() in plan_names
-        )
+        })
     else:
         planned = int(payload.get("plan_total") or 0) or attempted
         ok_q = attempted - failed_attempts

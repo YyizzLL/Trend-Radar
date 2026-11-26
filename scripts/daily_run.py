@@ -43,19 +43,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config import load_sources  # noqa: E402
-from src.constants import (  # noqa: E402
+from src.config import load_sources
+from src.constants import (
     EXIT_EDGE,
     EXIT_NEEDS_HUMAN,
     EXIT_NO_PLAN,
     EXIT_STALLED,
     EXIT_VERIFY,
 )
-from src.deliver import digest as digest_mod  # noqa: E402
-from src.deliver.archive import archive_run  # noqa: E402
-from src.deliver.email_html import render_html, render_text  # noqa: E402
-from src.deliver.smtp import load_config as load_email_config, send as send_email  # noqa: E402
-from src.deps import missing_modules  # noqa: E402
+from src.deliver import digest as digest_mod
+from src.deliver.archive import archive_run
+from src.deliver.email_html import render_html, render_text
+from src.deliver.smtp import load_config as load_email_config
+from src.deliver.smtp import send as send_email
+from src.deps import missing_modules
 
 LOCK_PATH = ROOT / "data" / "state" / "daily_lock.json"
 DAILY_DIR = ROOT / "data" / "daily"
@@ -209,6 +210,25 @@ def _tail(path: Path, count: int = 8) -> str:
         return ""
     lines = [ln for ln in text.strip().splitlines() if not ln.startswith("# ")]
     return " / ".join(lines[-count:])
+
+
+def stop_edge(proc: subprocess.Popen | None) -> None:
+    """结束本次启动的 Edge，并等它释放 9222。
+
+    `terminate()` 只是发信号；不 wait 的话下一次 `port_ready()` 可能连上
+    正在退出的旧进程，重启逻辑会误判成功。
+    """
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def _human_seconds(seconds: float) -> str:
@@ -568,8 +588,7 @@ def main() -> int:
                 if args.skip_plan:
                     log("使用外部计划（--skip-plan）：跳过种子抓取与计划生成")
                     if not (ROOT / "data" / "input" / "query_plan.json").exists():
-                        log("✘ 没有找到 data/input/query_plan.json，无法继续")
-                        return 1
+                        raise RuntimeError("没有找到 data/input/query_plan.json，无法继续（--skip-plan）")
                 else:
                     # 热点种子：抓聚合榜 → 模型筛 → 生成「热种」查询词。
                     try:
@@ -625,7 +644,7 @@ def main() -> int:
                             continue
                         log(f"覆盖度 {ok_n}/{planned}")
                         break
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         # 退出码语义统一在 src/constants：
                         # 3 验证码 / 4 页签 / 5 连不上 Edge / 6 登录失效 / 7 静默超时。
                         code = getattr(exc, "returncode", None)
@@ -654,7 +673,7 @@ def main() -> int:
                                 verify_tries += 1
                                 log(f"检测到人机验证，重启 Edge 换会话后重试"
                                     f"（第 {verify_tries}/{verify_retries} 次）")
-                                edge_proc.terminate()
+                                stop_edge(edge_proc)
                                 edge_proc = None
                                 time.sleep(3)
                                 time.sleep(verify_wait_s)
@@ -674,7 +693,7 @@ def main() -> int:
                             # 连不上 CDP：端口可能被占，或浏览器假死。
                             # 自己起的那个直接重启；用户自己开着的不要动，只提示。
                             if edge_proc is not None and edge_proc.poll() is None:
-                                edge_proc.terminate()
+                                stop_edge(edge_proc)
                                 edge_proc = None
                                 log("9222 连不上，已结束本次启动的 Edge，准备重开")
                             else:
@@ -799,7 +818,7 @@ def main() -> int:
     finally:
         # 只结束「本次自己启动」的 Edge；用户原本开着的不要动
         if edge_proc is not None and edge_proc.poll() is None:
-            edge_proc.terminate()
+            stop_edge(edge_proc)
             log("已结束本次启动的 Edge")
 
 

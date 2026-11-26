@@ -22,11 +22,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.collectors.http import Fetcher  # noqa: E402
-from src.collectors.tunbang import DEFAULT_BOARDS, collect  # noqa: E402
-from src.config import DATA_DIR, load_sources  # noqa: E402
-from src.llm import seed_filter  # noqa: E402
-from src.llm.client import probe  # noqa: E402
+from src.collectors.http import Fetcher
+from src.collectors.tunbang import DEFAULT_BOARDS, collect
+from src.config import DATA_DIR, load_sources
+from src.llm import seed_filter
+from src.llm.client import probe
 
 OUT = DATA_DIR / "input" / "hot_seeds.json"
 log = logging.getLogger("seeds")
@@ -46,7 +46,7 @@ def main() -> int:
         log.info("tunbang 未启用，跳过")
         return 0
 
-    ua = (cfg.get("collect") or {}).get("user_agent") or "Mozilla/5.0"
+    ua = (cfg.get("run") or {}).get("user_agent") or "Mozilla/5.0"
     now = datetime.now().isoformat(timespec="seconds")
 
     with Fetcher(ua, timeout=float(tb.get("timeout_seconds", 20))) as fetcher:

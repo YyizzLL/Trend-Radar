@@ -20,7 +20,7 @@ log = logging.getLogger("radar.llm")
 # prompt 有实质改动就改这个，旧缓存自然失效
 PROMPT_VERSION = "v1"
 
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
 @dataclass
@@ -253,8 +253,10 @@ class LLM:
                         "parsed": data,
                     },
                 )
-                if data is None:
-                    last_err = "输出不是合法 JSON"
+                if not isinstance(data, dict):
+                    # 只要对象：list / 字符串 / 数字都算格式错。
+                    # 之前只挡 None，模型回一个数组也会被标 ok 并写进缓存。
+                    last_err = "输出不是 JSON 对象"
                     # 重试一次：首轮回放 24 组里有 1 组是这个错，重跑后同一组成功了。
                     # 只重试一次 —— 同样的输入连续给坏格式，说明是模型侧问题，再试也是浪费。
                     if attempt == 0:

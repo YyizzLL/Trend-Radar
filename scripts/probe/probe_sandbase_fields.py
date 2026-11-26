@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env", encoding="utf-8")
 
 sys.path.insert(0, str(ROOT))
-from src.config import env  # noqa: E402
+from src.config import env
 
 BASE = env("SANDBASE_BASE_URL") or "https://api.sandbase.ai"
 PATH = "/v1/api/douyin/app-v3/one-video-v3"

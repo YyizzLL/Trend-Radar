@@ -86,7 +86,7 @@ def archive_run(
             subject = subject or digest_mod.subject_line(d)
             html = render_html(d, limits=limits)
             text = render_text(d)
-        except Exception:  # noqa: BLE001 - 归档不能因为渲染失败而中断
+        except Exception:  # noqa: BLE001
             html, text = "", ""
     elif not html:
         note = "email.html 未生成：本轮 report_data.json 已按清理规则删除，无法重建"

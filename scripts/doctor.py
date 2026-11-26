@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.deps import REQUIRED_MODULES  # noqa: E402
+from src.deps import REQUIRED_MODULES
 
 OK, WARN, BAD = "✓", "⚠", "✗"
 failures: list[str] = []

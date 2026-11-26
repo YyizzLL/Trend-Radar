@@ -22,7 +22,14 @@ def song_in_text(text: str, song: dict[str, Any]) -> bool:
     artists = [a for a in (song.get("artists") or []) if len(a) >= 2]
 
     def _tagged() -> bool:
-        return f"#{key}" in low or any(a.lower() in low for a in artists)
+        return f"#{key}" in low or any(
+            (len(a) >= 3 or not a.isascii()) and a.lower() in low
+            for a in artists
+        ) or any(
+            len(a) >= 2 and a.isascii()
+            and re.search(rf"(?<![a-z0-9]){re.escape(a.lower())}(?![a-z0-9])", low)
+            for a in artists
+        )
 
     if key.isascii():
         if not re.search(rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])", low):

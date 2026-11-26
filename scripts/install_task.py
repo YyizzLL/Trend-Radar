@@ -28,11 +28,12 @@ import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config import load_sources  # noqa: E402
+from src.config import load_sources
 
 TASK_NAME = "StarlightRadarDaily"
 SCRIPT = ROOT / "scripts" / "daily_run.py"
@@ -132,7 +133,7 @@ def build_xml(time_str: str, delay_min: int, retry_time: str = "11:30") -> str:
   <Actions Context="Author">
     <Exec>
       <Command>{py}</Command>
-      <Arguments>{args}</Arguments>
+      <Arguments>{escape(args)}</Arguments>
       <WorkingDirectory>{ROOT}</WorkingDirectory>
     </Exec>
   </Actions>

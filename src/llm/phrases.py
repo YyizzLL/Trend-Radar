@@ -29,18 +29,24 @@ _NON_CJK_RE = re.compile(r"[^\u4e00-\u9fa5]")
 
 
 def _overlap(text: str, source: str) -> float:
-    """交付句里有多少字来自原句（按字频交集 / 交付句长度，只算汉字）。
+    """交付句与原句的字重叠度（按字频交集，只算汉字）。
+
+    取「相对交付句」和「相对原句」两个比例的较大值：
+    - 相对交付句：防止拿一个短片段补出长句（原句只占交付句的一小块）
+    - 相对原句：防止原句很长、只截取其中一小段就当成新句
 
     比最长公共子串宽松：允许删字、换专名、调语序，只挡住「整句另写」。
     """
     a, b = _NON_CJK_RE.sub("", text), _NON_CJK_RE.sub("", source)
     if not a:
-        return 1.0
+        return 0.0  # 纯非 CJK 输出不应绕过重叠检查
     if not b:
         return 0.0
     pool = Counter(b)
     common = sum(min(n, pool[ch]) for ch, n in Counter(a).items() if ch in pool)
-    return common / len(a)
+    if not common:
+        return 0.0
+    return max(common / len(a), common / len(b))
 
 
 def _anchor(text: str, known: dict[str, dict[str, Any]], fallback: str) -> str:
@@ -197,6 +203,8 @@ def evaluate(
                 "sample": (src.get("sample") or "")[:60],
                 "bgm": src.get("bgm", ""),
                 # 首见于几天前：None 表示今天第一次见（或没有历史）
+                # 注意：下游 render.py / email_html.py 读 "days" 判断常青老梗
+                "days": src.get("first_seen_days"),
                 "first_seen_days": src.get("first_seen_days"),
                 # 归一化后的代表词：同一句的不同切法共享年龄
                 "canonical": src.get("canonical"),

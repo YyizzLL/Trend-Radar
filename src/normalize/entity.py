@@ -35,7 +35,7 @@ _CHALLENGE_RE = re.compile(r"^[\u4e00-\u9fa5A-Za-z0-9]{2,16}(挑战|挑战赛)$"
 
 def _clean_name(raw: str) -> str:
     name = raw.strip().strip("《》「」“”""''·.。，, ")
-    name = re.sub(r"(完整版|官方版|高音质|无损|原版|翻自|cover)$", "", name, flags=re.I).strip()
+    name = re.sub(r"(完整版|官方版|高音质|无损|原版|翻自|cover)$", "", name, flags=re.IGNORECASE).strip()
     return name
 
 

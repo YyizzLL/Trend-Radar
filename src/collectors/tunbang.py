@@ -30,10 +30,10 @@ DEFAULT_BOARDS: dict[str, str] = {
     "weibo": "https://tunbang.com/hot/weibo/",
 }
 
-_ROW_RE = re.compile(r'<li class="row">(.*?)</li>', re.S)
+_ROW_RE = re.compile(r'<li class="row">(.*?)</li>', re.DOTALL)
 _RANK_RE = re.compile(r'<span class="rank[^"]*">\s*(\d+)\s*</span>')
 _TITLE_RE = re.compile(
-    r'<a class="row-title" href="([^"]*)"[^>]*>(.*?)</a>', re.S
+    r'<a class="row-title" href="([^"]*)"[^>]*>(.*?)</a>', re.DOTALL
 )
 _CHIP_RE = re.compile(r'<span class="chip"><a href="[^"]*">([^<]*)</a></span>')
 _HOT_RE = re.compile(r'<span class="hot">([^<]*)</span>')
@@ -90,7 +90,7 @@ def collect(
     for name, url in boards.items():
         try:
             page = fetcher.get_text(url, qps_ms=qps, retries=1)
-        except Exception as exc:  # noqa: BLE001 - 第三方站，失败就跳过
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"{name}: {exc}")
             continue
         for row in parse_board(page, name, limit=limit):

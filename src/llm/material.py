@@ -148,14 +148,14 @@ def extract_batch(
                 continue
             # 证据回链：模型给的 url 必须真的在输入里，否则整条作废。
             # 这是防编造的硬约束，不靠提示词。
-            evidence = [str(u) for u in (m.get("evidence") or []) if str(u) in urls]
+            evidence = list(dict.fromkeys(str(u) for u in (m.get("evidence") or []) if str(u) in urls))
             if not evidence:
                 stats["dropped_evidence"] += 1
                 continue
             try:
                 conf = float(m.get("confidence") or 0)
             except (TypeError, ValueError):
-                conf = 0.5
+                conf = 0.0  # 非数字 confidence 应该被丢弃，而不是默认通过
             conf = max(0.0, min(1.0, conf))
             if conf < MIN_CONF:
                 continue

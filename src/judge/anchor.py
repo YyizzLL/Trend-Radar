@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # 这些别名本身是普通词（十七 / 四代 / 三代），只有写成 #话题 才认
@@ -29,6 +30,16 @@ AMBIGUOUS_MEMBERS = {
 
 # C 档（大众情怀型）不算圈内：一条用周杰伦 BGM 的剪辑，不该把圈内素材挤掉
 MIN_WEIGHT = 0.3
+
+
+def _probe_in(low: str, probe: str) -> bool:
+    """探针是否出现在文本里。ASCII 要加词边界，否则 IU 会命中 giulietta。"""
+    p = probe.lower()
+    if not p:
+        return False
+    if p.isascii():
+        return re.search(rf"(?<![a-z0-9]){re.escape(p)}(?![a-z0-9])", low) is not None
+    return p in low
 
 
 def match_subject(
@@ -81,7 +92,7 @@ def match_subject(
         for probe in (subject, *aliases.get(subject, [])):
             if not _accept(probe, primary=(probe == subject)):
                 continue
-            if probe.lower() not in low or len(probe) <= best_len:
+            if not _probe_in(low, probe) or len(probe) <= best_len:
                 continue
             # 歧义别名：必须写成 #话题
             if probe != subject and probe in AMBIGUOUS_ALIASES and f"#{probe.lower()}" not in low:
@@ -98,13 +109,13 @@ def match_subject(
             continue
         if not _ambiguous_ok(group):
             continue
-        if member.lower() in low and len(member) > best_len:
+        if _probe_in(low, member) and len(member) > best_len:
             best_subject, best_len = group, len(member)
 
     for cp in (cp_names or []):
         if not _accept(cp):
             continue
-        if cp.lower() in low and len(cp) > best_len:
+        if _probe_in(low, cp) and len(cp) > best_len:
             best_subject, best_len = cp, len(cp)
 
     return best_subject

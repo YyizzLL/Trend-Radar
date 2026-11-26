@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 sys.path.insert(0, str(ROOT))
-from src.config import env  # noqa: E402
-from src.collectors.bgm_sampler import _find_music  # noqa: E402
+from src.collectors.bgm_sampler import _find_music
+from src.config import env
 
 BASE = env("SANDBASE_BASE_URL") or "https://api.sandbase.ai"
 PATH = "/v1/api/douyin/app-v3/one-video-v3"

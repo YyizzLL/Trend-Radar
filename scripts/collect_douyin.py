@@ -53,14 +53,15 @@ def strip_proxy_for_localhost() -> list[str]:
     os.environ["no_proxy"] = "127.0.0.1,localhost,::1"
     return removed
 
-from src.config import load_sources  # noqa: E402
-from src.constants import (  # noqa: E402
+from src.config import load_sources
+from src.constants import (
     EXIT_EDGE,
     EXIT_LOGIN,
     EXIT_NO_PLAN,
     EXIT_PAGE,
     EXIT_VERIFY,
 )
+
 OUT = ROOT / "data" / "input" / "douyin_latest.json"
 PLAN = ROOT / "data" / "input" / "query_plan.json"
 
@@ -142,7 +143,7 @@ class Diag:
             self.records.append(info)
             self.shots += 1
             self._save()
-        except Exception:  # noqa: BLE001 - 诊断失败不能影响采集
+        except Exception:  # noqa: BLE001
             pass
 
     def record_only(self, keyword: str, err: str, note: str = "") -> None:
@@ -318,7 +319,7 @@ class Searcher:
             except Exception:  # noqa: BLE001
                 pass
             return True
-        except Exception:  # noqa: BLE001 - 改词失败不改语义，调用方退回整页
+        except Exception:  # noqa: BLE001
             self.spa_fallbacks += 1
             self.on_results = False
             return False
@@ -331,7 +332,7 @@ class Searcher:
             pass
         try:
             self.page = self.ctx.new_page()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if _is_page_closed(exc):
                 raise PageLost(f"无法新建页签：{reason}") from exc
             raise
@@ -427,12 +428,12 @@ def _pause(page, seconds: float, keyword: str) -> None:
     """退避等待；页签在这期间死掉要转成 PageLost，不能冒泡成 exit=1。"""
     try:
         page.wait_for_timeout(seconds * 1000)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise PageLost(f"{keyword}：退避等待时页签已关闭") from exc
 
 
 def run_query(searcher: Searcher, keyword: str, scroll: int, retries: int,
-              diag: "Diag | None" = None,
+              diag: Diag | None = None,
               select_timeout: float = 15.0) -> tuple[list[dict], str]:
     """执行单个查询。返回 (items, error)。成功时 error 为空串。
 
@@ -492,7 +493,8 @@ def run_query(searcher: Searcher, keyword: str, scroll: int, retries: int,
                 # 先分辨是不是人机验证：这是「空结果」里唯一需要人工介入的情况。
                 # 重试再多次也没用，不如立刻停下来说清楚要人做什么。
                 if verify_blocked(page):
-                    diag.capture(page, keyword, "人机验证")
+                    if diag:
+                        diag.capture(page, keyword, "人机验证")
                     print("\n✘ 检测到抖音人机验证，采集中止")
                     print("  请在 Edge 窗口手动完成验证（点击形状相同的物体），然后重跑")
                     print(f"  退出码 {EXIT_VERIFY} = 需要人工介入，重试无效")
@@ -533,7 +535,7 @@ def run_query(searcher: Searcher, keyword: str, scroll: int, retries: int,
             if _is_page_closed(exc):
                 raise PageLost(f"{keyword}：页签已关闭") from exc
             last_err = str(exc)[:60]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if _is_page_closed(exc):
                 raise PageLost(f"{keyword}：页签已关闭") from exc
             last_err = str(exc)[:60]
@@ -767,16 +769,17 @@ def main() -> int:
                 q for q in payload["queries"]
                 if str(q.get("q", "")).lower() != keyword.lower()
             ]
+            q_days = searcher.days  # 该查询自己的时间窗（歌名 5 / 主体 7 / 玩法 5）
             payload["queries"].append({
-                "q": keyword, "type": item.get("type", ""), "publish_time": days,
+                "q": keyword, "type": item.get("type", ""), "publish_time": q_days,
                 "items": items, "new_unique": fresh, "error": err,
                 # 观测字段：mode 区分「改词 / 整页」；aged_out 记录超过时间窗的条数。
                 # 页内改词不带 publish_time 过滤，这两个数用来事后判断有没有退化。
                 "mode": searcher.last_mode,
                 "aged_out": sum(
                     1 for i in items
-                    if isinstance(i.get("age_days"), int) and i["age_days"] > days
-                ) if days else 0,
+                    if isinstance(i.get("age_days"), int) and i["age_days"] > q_days
+                ) if q_days else 0,
             })
             save_atomic(payload)
             flag = f"✗ {err}" if err else f"+{fresh} 新"

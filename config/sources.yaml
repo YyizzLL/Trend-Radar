@@ -33,7 +33,7 @@ sources:
     # 计划优先：scripts/plan_queries.py 生成 data/input/query_plan.json
     # 没有计划文件时直接报错退出——旧版会回退到「按日期轮转」，已删除
     plan_file: "data/input/query_plan.json"
-    max_queries: 34        # 单轮查询上限（四类：歌名/主体/玩法/热种）
+    max_queries: 34        # 单轮查询上限（三类：歌名/主体/玩法；热种只作主体信号）
     scroll: 5              # 每查询滚动次数（整页：16 + 10×5 ≈ 66 条）
                            # 注：若用实验开关 --spa（页内改词），建议临时调到 8——
                            # 改词不带 publish_time 过滤，需要更深才能收到同样多的新内容
@@ -51,7 +51,6 @@ sources:
       歌名: 12             # 榜单歌名，词库只用于排序
       主体: 12             # 有信号的优先；剩余按 region 均分轮转补齐（内娱/韩娱各半）
       玩法: 4              # 热榜形式词优先，排不满用泛词（变装/转场/卡点）补
-      热种: 6              # 来自 tunbang 聚合榜，见文件末尾 tunbang 段
 
   douyin_music:
     enabled: false       # 未接入；关闭时 BGM 证据标记为「不可用」
@@ -196,9 +195,8 @@ delivery:
       circle: 8
       cross: 3
       refs_per_material: 3
-      clusters: 4
       chart_news: 8
-      phrases: 8
+      phrase_eval: 8
       candidates: 10
 
 # 分层清理：避免 sandbox 无限膨胀（每次 --run 结束自动执行）

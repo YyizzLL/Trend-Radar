@@ -30,7 +30,7 @@ UA = (
 )
 
 _LDJSON_RE = re.compile(
-    r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', re.S
+    r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', re.DOTALL
 )
 
 

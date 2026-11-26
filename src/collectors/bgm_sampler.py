@@ -40,7 +40,7 @@ MEDIA_SKIP = ["图文", "合集", "直播回放", "直播切片", "照片"]
 # 注意：`@xxx创作的原声` **不再算占位**——它是作者上传的原始音频，
 # 官方账号（@TWS_PLEDIS 这类）发的原声往往就是这首挑战曲本身，
 # 对二创恰恰最有用。以前一律丢弃，等于把唯一能拿到的 BGM 信息扔了（2026-11-25）。
-PLACEHOLDER_RE = re.compile(r"(模板音乐|模板创作人|剪映模板|^原声$|^bgm$)", re.I)
+PLACEHOLDER_RE = re.compile(r"(模板音乐|模板创作人|剪映模板|^原声$|^bgm$)", re.IGNORECASE)
 
 
 def is_placeholder(title: str) -> bool:
@@ -165,7 +165,7 @@ def plan(
         # 2) 缓存命中（占位结果也命中缓存，但不再展示）
         if mat.name in cache:
             cached = cache[mat.name]
-            if cached.get("placeholder") or is_placeholder(str(cached.get("title") or "")):
+            if cached.get("placeholder") or cached.get("is_original") or is_placeholder(str(cached.get("title") or "")):
                 result.skip("曾采到占位/原声")
                 continue
             mat.bgm_title = str(cached.get("title") or "")

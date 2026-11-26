@@ -55,7 +55,23 @@ class Digest:
             "chart_news": len(self.chart_news),
             "phrase_eval": len(self.phrase_eval),
             "candidates": len(self.candidates),
+            # 文案总数 = 采集成品 + 去重后的热榜句。摘要卡片和正文都用这个数。
+            "text": len(self.text_entries) + len(self.hot_copy),
         }
+
+    @property
+    def hot_copy(self) -> list[str]:
+        """热榜文案里不与采集成品重复的那些（采集优先，信息更多）。
+
+        三处渲染（Markdown / HTML / 纯文本）都读这里，避免各算一遍。
+        """
+        hot = [x for x in ((self.hotboard or {}).get("文案") or []) if x]
+        if self.text_entries and hot and hot:
+            hot = [
+                t for t in hot
+                if not any(related(t, str(e.get("text") or "")) for e in self.text_entries)
+            ]
+        return hot
 
 
 def _read(path: Path, default: Any) -> Any:
@@ -107,7 +123,11 @@ def _material_row(m: dict[str, Any]) -> dict[str, Any]:
 def build(run_dir: Path, limits: dict[str, int] | None = None) -> Digest:
     lim = dict(DEFAULT_LIMITS)
     if limits:
-        lim.update({k: int(v) for k, v in limits.items() if k in lim})
+        # 支持 phrases/phrase_eval 别名兼容
+        parsed = dict(limits)
+        if "phrases" in parsed and "phrase_eval" not in parsed:
+            parsed["phrase_eval"] = parsed["phrases"]
+        lim.update({k: int(v) for k, v in parsed.items() if k in lim})
 
     materials = _read(run_dir / "materials.json", [])
     meta = _read(run_dir / "meta.json", {})
@@ -208,16 +228,8 @@ def subject_line(d: Digest) -> str:
         f"跨圈{c['cross']}",
         f"新歌{c['chart_news']}",
     ]
-    # 文案数 = 采集成品 + 热榜句子（去重后）。
-    # 模型已经把「可直接用」和「补齐后可用的」合成一份，这里不再区分 use / watch（2026-11-25）。
-    usable = len(d.text_entries)
-    hot_copy = [x for x in ((d.hotboard or {}).get("文案") or []) if x]
-    if d.text_entries and hot_copy:
-        hot_copy = [
-            t for t in hot_copy
-            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
-        ]
-    usable += len(hot_copy)
+    # 文案数 = 采集成品 + 热榜句子（去重后），见 Digest.hot_copy
+    usable = c["text"]
     if usable:
         parts.append(f"文案{usable}")
     return f"【追星二创雷达】{d.date[5:] if d.date else ''}｜" + " ".join(parts)

@@ -33,7 +33,7 @@ class Candidate(BaseModel):
     sources: list[str] = Field(default_factory=list)
     template_hits: list[str] = Field(default_factory=list)   # "词@骨架"，由骨架抽取填充
 
-    def finalize(self) -> "Candidate":
+    def finalize(self) -> Candidate:
         """补全合并字段的默认值。"""
         if not self.platforms:
             self.platforms = [self.platform]

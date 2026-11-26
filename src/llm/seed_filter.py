@@ -23,17 +23,6 @@ log = logging.getLogger("radar.llm.seeds")
 
 VALID_TYPES = {"A", "B", "C", "D"}
 
-# 物料类：标题里出现这些词，说明有对应的内容形态，拼对应后缀
-_SUFFIX_RULES: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
-    (("新歌", "单曲", "专辑", "发歌"), ("新歌", "舞台")),
-    (("综艺", "节目"), ("名场面", "台词")),
-    (("剧", "开播", "定档", "首播"), ("名场面",)),
-    (("演唱会", "巡演", "音乐节"), ("演唱会",)),
-]
-
-MIN_Q, MAX_Q = 2, 20
-
-
 def select(
     llm: LLM,
     seeds: list[dict[str, Any]],

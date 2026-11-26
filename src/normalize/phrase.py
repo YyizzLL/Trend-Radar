@@ -14,7 +14,8 @@ import re
 from collections import Counter, defaultdict
 from statistics import median
 
-from ..judge.domain import DOMAIN_NOISE, HARD_NOISE_GROUPS, hit as domain_hit
+from ..judge.domain import DOMAIN_NOISE, HARD_NOISE_GROUPS
+from ..judge.domain import hit as domain_hit
 from ..judge.works import looks_like_title, works_ratio
 from ..models import Candidate
 
@@ -205,6 +206,13 @@ def top_phrases(
 
     kept: dict[str, int] = {}
     variants: dict[str, list[str]] = defaultdict(list)
+    # 聚合各成员的统计：circle_hits, best_like, ages, sample, contexts, subject_sets
+    group_circle: dict[str, int] = {}
+    group_like: dict[str, float] = {}
+    group_sample: dict[str, str] = {}
+    group_contexts: dict[str, list[str]] = {}
+    group_ages: dict[str, list[float]] = {}
+    group_subjects: dict[str, set[str]] = {}
     # 代表词取组内**最长**的那条：传递闭包里所有成员都是它的子串，
     # 所以最长的就是「这句话的完整写法」。取计数最高的会挑到「上上升期」这种
     # 最短窗口（它出现得最多），正是用户抱怨的碎片（2026-11-17 实测）。
@@ -212,10 +220,30 @@ def top_phrases(
         rep = max(members, key=lambda x: (len(x[0]), x[1]))[0]
         kept[rep] = max(c for _, c in members)
         variants[rep] = [g for g, _ in members if g != rep]
+        # 跨成员聚合统计
+        group_circle[rep] = sum(circle_hits.get(g, 0) for g, _ in members)
+        group_like[rep] = max((best_like.get(g, 0) for g, _ in members), default=0)
+        group_sample[rep] = sample.get(rep) or next(
+            (sample.get(g, "") for g, _ in members if sample.get(g)), ""
+        )
+        merged_ctx: list[str] = []
+        for g, _ in members:
+            for c in contexts.get(g, []):
+                if c not in merged_ctx:
+                    merged_ctx.append(c)
+        group_contexts[rep] = merged_ctx[:3]
+        merged_subj: set[str] = set()
+        for g, _ in members:
+            merged_subj.update(subject_sets.get(g, ()))
+        group_subjects[rep] = merged_subj
+        merged_ages: list[float] = []
+        for g, _ in members:
+            merged_ages.extend(ages.get(g, []))
+        group_ages[rep] = merged_ages
 
     def _age_stats(gram: str) -> tuple[float | None, float | None, float | None]:
         """(中位年龄, 最老年龄, ≤3 天占比)。没有年龄数据时返回三个 None。"""
-        a = ages.get(gram) or []
+        a = group_ages.get(gram) or ages.get(gram) or []
         if not a:
             return None, None, None
         return (
@@ -247,19 +275,19 @@ def top_phrases(
             "phrase": gram,
             "videos": count,
             "variants": variants.get(gram, []),
-            "likes_max": best_like.get(gram, 0),
-            "sample": sample.get(gram, ""),
-            "contexts": contexts.get(gram, [])[:3],
-            "works_ratio": round(works_ratio(contexts.get(gram, [])), 2),
+            "likes_max": group_like.get(gram, best_like.get(gram, 0)),
+            "sample": group_sample.get(gram, sample.get(gram, "")),
+            "contexts": group_contexts.get(gram, contexts.get(gram, []))[:3],
+            "works_ratio": round(works_ratio(group_contexts.get(gram, contexts.get(gram, []))), 2),
             "median_age": _age_stats(gram)[0],
             "max_age": _age_stats(gram)[1],
             "fresh_ratio": _age_stats(gram)[2],
             # 出现在多少条「提到关注主体」的内容里；0 = 纯跨圈
-            "circle_hits": circle_hits.get(gram, 0),
-            "circle_ratio": round(circle_hits.get(gram, 0) / count, 2) if count else 0.0,
+            "circle_hits": group_circle.get(gram, circle_hits.get(gram, 0)),
+            "circle_ratio": round(group_circle.get(gram, circle_hits.get(gram, 0)) / count, 2) if count else 0.0,
             # 跨主体度：出现在几个不同主体下，>=2 说明是通用表达
-            "subjects": sorted(subject_sets.get(gram, ()))[:5],
-            "subject_count": len(subject_sets.get(gram, ())),
+            "subjects": sorted(group_subjects.get(gram, subject_sets.get(gram, ())))[:5],
+            "subject_count": len(group_subjects.get(gram, subject_sets.get(gram, ()))),
         }
         for gram, count in ordered[:limit]
     ]

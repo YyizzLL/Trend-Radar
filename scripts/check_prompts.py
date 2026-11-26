@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.llm import promptdoc  # noqa: E402
-from src.llm.prompts import (  # noqa: E402
+from src.llm import promptdoc
+from src.llm.prompts import (
     discover_prompt,
     hotboard_prompt,
     material_prompt,

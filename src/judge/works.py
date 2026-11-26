@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import re
+
 WORK_CUES: dict[str, list[str]] = {
     "游戏": [
         "副本", "boss", "攻略", "通关", "抽卡", "装备", "皮肤", "赛季", "开黑",
@@ -31,6 +33,13 @@ WORK_CUES: dict[str, list[str]] = {
     ],
 }
 
+# 需要词边界匹配的 ASCII 短词（避免 "op" 命中 "kpop"、"cut" 命中 "cute" 等）
+_ASCII_CUES = {w for words in WORK_CUES.values() for w in words if w.isascii()}
+_ASCII_BOUNDARY_RE = {
+    w: re.compile(rf"(?<![a-z0-9]){re.escape(w)}(?![a-z0-9])", re.IGNORECASE)
+    for w in _ASCII_CUES
+}
+
 # 有人称 / 语气 / 动作标记的，更像「一句话」而不是「一个作品名」
 SENTENCE_MARKERS = [
     "我", "你", "他", "她", "它", "我们", "你们", "他们",
@@ -45,7 +54,14 @@ WORK_RATIO_THRESHOLD = 0.6
 def _hits(low: str) -> list[str]:
     out: list[str] = []
     for words in WORK_CUES.values():
-        out.extend(w for w in words if w and w in low)
+        for w in words:
+            if not w:
+                continue
+            if w in _ASCII_CUES:
+                if _ASCII_BOUNDARY_RE[w].search(low):
+                    out.append(w)
+            elif w in low:
+                out.append(w)
     return out
 
 

@@ -21,8 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config import env  # noqa: E402
-from src.deliver.archive import DAILY_DIR, archive_run  # noqa: E402
+from src.config import env
+from src.deliver.archive import DAILY_DIR, archive_run
 
 # 日期 → (运行目录名, 发送时间, 实际发出的邮件主题)
 KNOWN = {

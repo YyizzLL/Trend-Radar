@@ -44,7 +44,7 @@ def render_report(
     for st in statuses:
         fields = ", ".join(st.fields[:6]) if st.fields else "—"
         lines.append(
-            f"| {st.id} | {_ICON.get(st.status, '?')} {st.status} | {st.count} | {fields} | {st.note or '—'} |"
+            f"| {st.id} | {_ICON.get(st.status, '?')} {st.status} | {st.count} | {_cell(fields)} | {_cell(st.note or '—')} |"
         )
     lines.append("")
     lines.append(
@@ -138,8 +138,6 @@ def render_report(
                 lines.append(f"**{i}. {_cell(e['text'], 40)}**")
                 lines.append("")
                 nums = f"- 在用：{e['videos']} 条"
-                if e.get("size"):
-                    nums += f"（整句 {e['size']}）"
                 if e.get("likes_max"):
                     nums += f"｜最高 {int(e['likes_max']):,} 赞"
                 hits = e.get("circle_hits")
@@ -151,16 +149,6 @@ def render_report(
                 lines.append(nums)
                 if e.get("bgm"):
                     lines.append(f"- 配套：{_cell(e['bgm'], 24)}")
-                tags = " ".join(f"#{t}" for t in (e.get("tags") or [])[:5])
-                if tags:
-                    lines.append(f"- 标签：{tags}")
-                links = " ".join(
-                    f"[{j + 1}]({m['url']})"
-                    for j, m in enumerate(e.get("members") or [])
-                    if isinstance(m, dict) and m.get("url")
-                )
-                if links:
-                    lines.append(f"- 参考：{links}")
                 lines.append("")
 
         if wb:

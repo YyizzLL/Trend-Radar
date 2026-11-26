@@ -1,4 +1,4 @@
-"""离线回放：拿已经采到的数据跑 L2 / L3，和规则版对照。
+"""离线回放：拿已经采到的数据跑「素材理解层」，和规则版对照。
 
 **不联网、不采集、不改 data/**：输入是 `sandbox/runs/<ts>/candidates.json`，
 输出写到 `sandbox/replay/<ts>/`。删掉目录就等于回滚。
@@ -8,8 +8,8 @@
 
 用法：
     python scripts/llm_replay.py --dry                 # 不调模型，只看要花多少
-    python scripts/llm_replay.py                       # 回放 L2 + L3
-    python scripts/llm_replay.py --layer material      # 只回放 L2
+    python scripts/llm_replay.py                       # 回放素材理解层
+    python scripts/llm_replay.py --layer material      # 只回放素材理解层
     python scripts/llm_replay.py --run 20261109-1442   # 指定某一轮
 """
 
@@ -24,14 +24,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config import alias_map, keyword_layer, load_keywords, load_sources  # noqa: E402
-from src.llm import context as llm_context  # noqa: E402
-from src.llm import material as llm_material  # noqa: E402
-from src.llm import prompts as llm_prompts  # noqa: E402
-from src.llm.client import probe  # noqa: E402
-from src.models import Candidate, EntityHit, Material  # noqa: E402
-from src.normalize import entity  # noqa: E402
-from src.normalize.aggregate import aggregate  # noqa: E402
+from src.config import alias_map, keyword_layer, load_keywords, load_sources
+from src.llm import context as llm_context
+from src.llm import material as llm_material
+from src.llm import prompts as llm_prompts
+from src.llm.client import probe
+from src.models import Candidate, EntityHit, Material
+from src.normalize import entity
+from src.normalize.aggregate import aggregate
 
 RUNS = ROOT / "sandbox" / "runs"
 REPLAY = ROOT / "sandbox" / "replay"
@@ -142,7 +142,7 @@ def main() -> int:
     # 公平基线：同一批 pairs 先跑一遍纯规则 aggregate。
     # 拿 materials.json 的 65 张去比是不对的 —— 那份还含榜单补卡和 BGM 采样，
     # 而这里的 aggregate 只有抽取结果。
-    rule_mats = aggregate([(c, list(hs)) for c, hs in pairs], today=today, lifecycle=None)
+    rule_mats = aggregate([(c, list(hs)) for c, hs in pairs])
     rule_cards = {m.name for m in rule_mats if m.mentions >= 2}
 
     # ---------------- L2 ----------------
@@ -157,7 +157,7 @@ def main() -> int:
             max_calls=args.limit or int(mat_layer.get("max_calls", 30)),
         )
         added = llm_material.apply_to_pairs(pairs, batch)
-        produced = aggregate(pairs, today=today, lifecycle=None)
+        produced = aggregate(pairs)
 
         rule_only = {(h.name, h.etype) for _, hs in pairs for h in hs if h.origin != "llm"}
         llm_out = {
@@ -179,7 +179,7 @@ def main() -> int:
             "lost": lost,
             "elapsed_s": round(time.time() - t0, 1),
         }
-        print(f"\n== L2 结果 ==")
+        print("\n== L2 结果 ==")
         print(f"调用 {batch.stats.get('calls')} 次（失败 {batch.stats.get('failed')}）"
               f"｜新增命中 {added} 个｜模型独有素材 {len(llm_out)} 个")
         print(f"≥2 条在用的卡：规则 {len(rule_cards)} 张 → 加模型 {len(after_cards)} 张")

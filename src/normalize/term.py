@@ -30,5 +30,3 @@ def normalize(text: str) -> str:
     return "".join(chars).strip().lower()
 
 
-def resolve(text: str, alias_index: dict[str, str]) -> str | None:
-    return alias_index.get(normalize(text))

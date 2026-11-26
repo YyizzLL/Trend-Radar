@@ -17,7 +17,8 @@ from datetime import date
 from ..models import Material
 from ..normalize.term import normalize as _norm
 from ..store.lifecycle import Lifecycle
-from .domain import DOMAIN_NOISE, HARD_NOISE_GROUPS, hit, hits as _hits
+from .domain import DOMAIN_NOISE, HARD_NOISE_GROUPS, hit
+from .domain import hits as _hits
 
 CIRCLE_IN = "圈内"
 CIRCLE_OUT = "跨圈"
@@ -208,7 +209,7 @@ def judge_materials(
         # 否则「新歌榜 #16、抖音 0 条」会把「10 条在用的挑战」挤掉
         chart_bonus = 0.0
         if mat.from_chart:
-            chart_bonus = 3.0 if 0 < mat.chart_rank <= 10 else 1.0
+            chart_bonus = 3.0 if 0 < (mat.chart_rank or 999) <= 10 else 1.0
 
         # 词龄权重（新词更值钱）：0~3 分，只影响排序，不参与门槛
         freshness = lifecycle.weight(age) if lifecycle else 0
@@ -240,6 +241,7 @@ def judge_materials(
                 mat.reason = f"{mat.reason}；连续第 {streak + 1} 天（仍在榜）"
             elif streak >= 2 and (growth < repeat_growth or halved):
                 mat.cls = "候选"
+                mat.repeat = True
                 why = "热度腰斩" if halved else "热度未增长"
                 mat.reason = (
                     f"连续第 {streak + 1} 天出现，{why}"

@@ -60,7 +60,7 @@ def load_recent_hot(
             continue
         try:
             mats = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - 历史文件坏了不该影响今天
+        except Exception:  # noqa: BLE001
             continue
         hot: dict[str, dict] = {}
         for m in mats:

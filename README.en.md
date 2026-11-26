@@ -1,6 +1,6 @@
 # Trend-Radar
 
-> 中文版：[`README.md`](README.md) ｜ Version: **v0.5.0**
+> 中文版：[`README.md`](README.md) ｜ Version: **v0.5.1**
 
 A daily radar that answers one question for fan-edit creators:
 **what can I actually use in a video today?**
@@ -299,7 +299,7 @@ no Python changes.
 
 ## Version
 
-Current: **v0.5.0** (2026-11-25). See [`CHANGELOG.md`](CHANGELOG.md) for history.
+Current: **v0.5.1** (2026-11-26). See [`CHANGELOG.md`](CHANGELOG.md) for history.
 Daily retrospectives live in the local `memory/` folder (not committed).
 
 ---

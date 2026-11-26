@@ -28,7 +28,7 @@ class Fetcher:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "Fetcher":
+    def __enter__(self) -> Fetcher:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -59,7 +59,7 @@ class Fetcher:
                 resp = self._client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
-            except Exception as exc:  # noqa: BLE001 - 采集层需要兜住所有异常
+            except Exception as exc:  # noqa: BLE001
                 last_err = exc
                 if attempt < retries:
                     time.sleep(2)

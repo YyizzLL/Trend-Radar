@@ -14,7 +14,6 @@ import math
 
 from ..constants import TYPE_RANK, TYPE_USAGE
 from ..models import Candidate, EntityHit, Material
-from ..store.lifecycle import Lifecycle
 from .term import normalize
 
 # 圈内证据占比下限：33 条里只 1 条带主体，不该叫「圈内」
@@ -33,9 +32,6 @@ _FAMILY_SUFFIXES = (
 
 def aggregate(
     items: list[tuple[Candidate, list[EntityHit]]],
-    *,
-    today: str,
-    lifecycle: Lifecycle | None,
 ) -> list[Material]:
     mats: dict[tuple[str, str], Material] = {}
 
@@ -127,7 +123,7 @@ def merge_variants(materials: list[Material]) -> list[Material]:
     同一批视频被拆到两个词上，两个都不够格或重复出现。
     保留名字更长的那条（更具体），把短名的证据并进来，并在 `variants` 里留痕。
     """
-    ordered = sorted(materials, key=lambda m: len(m.name), reverse=True)
+    ordered = sorted(materials, key=lambda m: len(normalize(m.name)), reverse=True)
     kept: list[Material] = []
 
     for mat in ordered:

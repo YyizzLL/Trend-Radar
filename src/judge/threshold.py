@@ -43,7 +43,7 @@ def apply(candidates: list[Candidate], cfg: Threshold) -> tuple[list[Candidate],
         stage1.append(c)
 
     # L1：同批分位（只有带点赞的候选参与）
-    likes = sorted((_likes(c) for c in stage1 if _likes(c) > 0))
+    likes = sorted(_likes(c) for c in stage1 if _likes(c) > 0)
     if likes and cfg.percentile > 0:
         idx = max(0, min(len(likes) - 1, int(len(likes) * cfg.percentile) - 1))
         floor = likes[idx]

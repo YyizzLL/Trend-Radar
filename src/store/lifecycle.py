@@ -38,6 +38,8 @@ def _lcs_len(a: str, b: str) -> int:
     """最长公共子串长度。短语都很短（<20 字），O(n·m) 够用。"""
     if not a or not b:
         return 0
+    # 注意：src/report/textmerge.py 有完全相同的实现（_lcs），
+    # 重构时考虑提取到 src/normalize/term.py 或 src/utils.py 共用。
     prev = [0] * (len(b) + 1)
     best = 0
     for ch in a:
@@ -58,7 +60,7 @@ class Lifecycle:
         if path.exists():
             try:
                 self.data = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001 - 状态文件损坏时从空开始，不阻塞主流程
+            except Exception:  # noqa: BLE001
                 self.data = {}
 
     def seed(self, word: str, family: str, first_seen: str) -> None:
@@ -126,6 +128,8 @@ class Lifecycle:
             if ratio < threshold:
                 continue
             first = str(rec.get("first_seen") or "")
+            if not first:
+                continue  # 缺失 first_seen 的记录不能参与比较
             if best is None or first < best[0]:
                 best = (first, key, rec)
         if not best:

@@ -34,19 +34,19 @@ import sys
 
 sys.path.insert(0, str(ROOT))
 
-from src.collectors import douyin_hot  # noqa: E402
-from src.collectors.http import Fetcher  # noqa: E402
-from src.collectors.qq_music import fetch as fetch_chart  # noqa: E402
-from src.config import (  # noqa: E402
+from src.collectors import douyin_hot
+from src.collectors.http import Fetcher
+from src.collectors.qq_music import fetch as fetch_chart
+from src.config import (
     alias_map,
     keyword_layer,
     load_keywords,
     load_sources,
     subject_profiles,
 )
-from src.judge.anchor import context as anchor_context  # noqa: E402
-from src.judge.anchor import match_subject  # noqa: E402
-from src.judge.material import is_activity_container  # noqa: E402
+from src.judge.anchor import context as anchor_context
+from src.judge.anchor import match_subject
+from src.judge.material import is_activity_container
 
 OUT = ROOT / "data" / "input" / "query_plan.json"
 # 验证时用 --seeds 指向 sandbox 的种子文件，不碰 data/input 的真实数据
@@ -125,7 +125,9 @@ def _group_names(kw: dict) -> set[str]:
     # `keyword_layer` 只处理 list，成员归属是 dict，这里直接取
     names = set(raw.keys()) if isinstance(raw, dict) else set()
     for subject, info in subject_profiles(kw).items():
-        if info.get("type") == "团体":
+        t = info.get("type", "")
+        st = info.get("sub_type", "")
+        if t == "团体" or t in {"男团", "女团", "乐队"} or st in {"男团", "女团", "乐队"}:
             names.add(subject)
     return names
 
@@ -263,11 +265,11 @@ def _subject_queries(
         for region, need in (("内娱", n_cn), ("韩娱", n_kr)):
             groups_ = [
                 s for s, i in profiles.items()
-                if i.get("region") == region and i.get("type") == "团体" and s not in used
+                if i.get("region") == region and (i.get("type") == "团体" or i.get("type") in {"男团", "女团", "乐队"} or i.get("sub_type") in {"男团", "女团", "乐队"}) and s not in used
             ]
             solos = [
                 s for s, i in profiles.items()
-                if i.get("region") == region and i.get("type") == "个人" and s not in used
+                if i.get("region") == region and (i.get("type") == "个人" or i.get("type") in {"solo", "演员", "rapper"} or i.get("sub_type") in {"solo", "演员", "rapper"}) and s not in used
             ]
             # 团体占 2/3：搜一个团体能带出全团内容，搜一个个人只覆盖他自己。
             # 2026-11-25 实测：内娱池按原顺序抽，6 个名额全是时代少年团成员，
@@ -372,48 +374,6 @@ def _template_queries(
     return out
 
 
-def _hot_seed_queries(used: set[str], limit: int) -> list[dict]:
-    """读「热点种子」，来自 scripts/collect_seeds.py（抓 tunbang + 模型筛选 + 转化）。
-
-    这是唯一还保留的「外部新词」入口：发现类已删除，热种是唯一能带来
-    我们没见过的东西的通道。
-
-    过期保护：只认今天或昨天的种子。拿不到就当没有——这是增强项，
-    不能因为第三方站挂了就中断整个计划生成。
-    """
-    path = SEEDS_PATH or (ROOT / "data" / "input" / "hot_seeds.json")
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return []
-
-    gen = str(data.get("generated_at") or "")[:10]
-    today = datetime.now().strftime("%Y-%m-%d")
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-    if gen and gen not in {today, yesterday}:
-        return []
-
-    out: list[dict] = []
-    for q in data.get("queries") or []:
-        word = str(q.get("q") or "").strip()
-        if not word or word.lower() in used:
-            continue
-        used.add(word.lower())
-        out.append(
-            {
-                "q": word,
-                "type": "热种",
-                "reason": f"聚合榜·{q.get('kind', '')}｜{str(q.get('from_title') or '')[:18]}",
-                "publish_time": DAYS["玩法"],
-            }
-        )
-        if len(out) >= limit:
-            break
-    return out
-
-
 def _interleave(batches: list[list[dict]], max_queries: int) -> list[dict]:
     """按类型轮流取，而不是「一类跑完再下一类」。
 
@@ -475,11 +435,9 @@ def main() -> int:
     # 少 10 个查询就少一半限流风险，而多搜几首歌名对「舞台」这个主轴没有帮助。
     chart = _chart_queries(sig, kw, int(quotas.get("歌名", 12)))
 
-    used = {q["q"].lower() for q in chart + subjects + template}
-    seeds = _hot_seed_queries(used, int(quotas.get("热种", 6)))
-
-    # 交错：歌名 / 玩法 / 主体 / 热种 轮流上，避免「前面把额度用完、只剩一类」
-    queries = _interleave([chart, template, subjects, seeds], max_queries)
+    # 交错：歌名 / 玩法 / 主体 轮流上，避免「前面把额度用完、只剩一类」
+    # 热种只作为主体信号（sig["seed_titles"]），不再单独生成查询
+    queries = _interleave([chart, template, subjects], max_queries)
 
     plan = {
         "date": datetime.now().strftime("%Y-%m-%d"),

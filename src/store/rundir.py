@@ -61,7 +61,7 @@ def clean_old(base: Path, days: int) -> list[str]:
 
 
 
-def _age_days(path: Path, today: "date") -> float:
+def _age_days(path: Path, today: date) -> float:
     """按目录名（YYYYMMDD-HHMM）算年龄。
 
     不能用 mtime：清理会改动目录内容，mtime 被刷新后「7 天前」永远算不出来。
@@ -85,7 +85,6 @@ HEAVY_FILES = (
 HEAVY_DIRS = ("email",)          # preview.html/txt，只在 --no-email 时生成
 
 # 轻量资产：一直保留（report.md 13KB + materials.json 45KB / 天）
-KEEP_FILES = ("report.md", "materials.json", "meta.json")
 
 
 def _dir_size(path: Path) -> int:

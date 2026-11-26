@@ -49,7 +49,7 @@ summary: 运维手册——目录与文件职责、环境准备、日常跑批�
 | `judge/threshold.py` | 内容级数据门槛（L0 点赞 / L1 分位） |
 | `judge/works.py` | 作品语境判据：判断短语是「文案梗」还是「作品名」（游戏/影视/动漫） |
 | `judge/domain.py` | 领域噪声词表（体育/电竞/时政/财经/国际/社会） |
-| `judge/material.py` | 素材卡判定 + 排序 + 主体配额；`llm_verdicts` 参数接收模型复核结果（keep/drop 两态） |
+| `judge/material.py` | 素材卡判定 + 排序 + 主体配额 + 跨天治理 |
 | `llm/client.py` | 模型客户端：OpenAI 兼容、`temperature=0`、响应缓存、审计落盘、**失败即降级** |
 | `llm/context.py` | 把 `CoreAssets/*.md` 按标题切片，按层只注入相关章节（不整篇塞） |
 | `llm/prompts.py` | 提示词拼装层：正文在 `CoreAssets/Prompts.md`，这里只填数据并注入判定标准 |
@@ -423,13 +423,13 @@ python -m src.main --clean --days 30       # 整体删除 30 天前的运行目�
 靠「标签共现重组新词」捞不到东西（产出 0.83 倍、负样本无区分度）。模型的长处不在重组
 本地共现，而在**带着世界知识做召回**和**读懂一批人在干什么**。
 
-四层各自独立开关，配置在 `config/sources.yaml` 的 `llm` 段：
+三层各自独立开关，配置在 `config/sources.yaml` 的 `llm` 段：
 
 | 层 | 做什么 | 不做什么 | 开关 |
 |---|---|---|---|
 | **L2 素材理解** | 一个搜索查询下的 40 条文案整批读，说出「这里有哪种具名素材」 | 不当判定层：产出只是多一个抽取器，仍走 aggregate → judge | `layers.material.enabled` |
 | **文案评估** | 每天一次：把复用句 / 高赞句 / 热榜句统一补齐成可直接用的成品，补不出来的丢掉 | 不改素材判定；模型没开或失败就退回「今日文案模板」栏 | `layers.phrase.enabled` |
-| **热点种子** | 判聚合榜热搜「能不能变成素材」（A物料/B玩法/C句子/D主体），再转成抖音查询词；不替代采集链路，只负责「今天该搜什么」 | 抓下来的标题 ≠ 结论，必须回抖音验使用量 | `tunbang.enabled` |
+| **热点种子** | 判聚合榜热搜「能不能变成素材」（A物料/B玩法/C句子/D主体），只作侦察输入与主体信号 | 不再单独生成查询；抓下来的标题 ≠ 结论，必须回抖音验使用量 | `tunbang.enabled` |
 
 **当前状态（2026-11-25）**：`llm.enabled: true`，开两层——`material`（素材理解）和
 `phrase`（文案评估）。查询生成和噪声复核已删除：前者由 agent 侦察替代，后者由热榜热梗覆盖。
@@ -462,7 +462,7 @@ python scripts/llm_replay.py         # 拿已有 candidate.json 离线回放，�
 ```
 
 确认有增益再改 `llm.enabled: true` + 对应 `layers.*.enabled: true`。
-**不要一次开三层**——同时变两个变量，结果好坏都归因不了。
+**不要一次开多层**——同时变两个变量，结果好坏都归因不了。
 
 **成本**：`deepseek-flash`，一批 L2 约 24 次调用 / 7 万 token，高峰时段约 ¥0.2/天。
 审计文件在 `sandbox/runs/<ts>/llm_calls/`，每条调用的耗时、token、原始响应都在。
@@ -478,7 +478,7 @@ python scripts/doctor.py          # 本地检查，不联网不花钱
 python scripts/doctor.py --llm    # 额外测一次模型连通
 ```
 
-它查：Python 版本、依赖、**时区（`Asia/Shanghai` 可用）**、`.env` 四项密钥（打码显示）、代理变量、
+它查：Python 版本、依赖、**时区（`Asia/Shanghai` 可用）**、`.env` 密钥（打码显示）、代理变量、
 9222 端口、**词库（`CoreAssets/keywords.json` 是否存在、主体是否为空）**、采集文件与检索计划的规模、
 模型层开关、最近一轮产物。有问题给出退出码 1 和待办清单。
 

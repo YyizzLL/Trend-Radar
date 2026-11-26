@@ -181,10 +181,10 @@ class PatternMatcher:
             if s.startswith(b):
                 s = s[len(b):]
                 break
-        for w in PREFIX_STOPS:
-            if w in s:
-                s = s.rsplit(w, 1)[-1]
-                break
+        # 取「结束位置最靠前」的停用前缀：`也来` 不能盖住 `我也来`
+        cuts = [(s.rfind(w) + len(w), w) for w in PREFIX_STOPS if w in s]
+        if cuts:
+            s = s[min(cuts)[0]:]
         for b in BRAND_WORDS:
             if s.startswith(b):
                 s = s[len(b):]

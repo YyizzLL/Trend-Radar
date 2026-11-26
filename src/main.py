@@ -36,7 +36,8 @@ from .judge.anchor import context as anchor_ctx
 from .judge.anchor import match_subject as _match_subject
 from .judge.history import load_recent_hot
 from .judge.material import NEW_CHARTS, judge_materials
-from .judge.threshold import Threshold, apply as apply_threshold
+from .judge.threshold import Threshold
+from .judge.threshold import apply as apply_threshold
 from .llm import context as llm_context
 from .llm import from_config as llm_from_config
 from .llm import material as llm_material
@@ -44,20 +45,34 @@ from .llm import phrases as llm_phrases
 from .models import Candidate, EntityHit, Material, SourceStatus
 from .normalize import entity
 from .normalize.aggregate import aggregate, merge_variants
-from .normalize.songmatch import song_in_text
-from .normalize.phrase import hot_lines, top_phrases, top_tags
-from .normalize.term import normalize as _norm
 from .normalize.merge import dedupe
 from .normalize.pattern import PatternMatcher
+from .normalize.phrase import hot_lines, top_phrases, top_tags
+from .normalize.songmatch import song_in_text
+from .normalize.term import normalize as _norm
 from .report.render import render_report
 from .store.lifecycle import Lifecycle, similarity
-from .store.rundir import clean_old, new_run_dir, now_local, prune, write_json, write_text
+from .store.rundir import (
+    clean_old,
+    new_run_dir,
+    now_local,
+    prune,
+    write_json,
+    write_text,
+)
 
 log = logging.getLogger("radar")
 
 
 def _setup_logging(log_file: Path | None) -> None:
     log.setLevel(logging.INFO)
+    # 重复调用（测试 / 同进程多轮）不能叠加 handler，否则每条日志打多遍
+    for h in list(log.handlers):
+        log.removeHandler(h)
+        try:
+            h.close()
+        except Exception:  # noqa: BLE001
+            pass
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S")
     stream = logging.StreamHandler(sys.stdout)
     stream.setFormatter(fmt)
@@ -460,7 +475,7 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
     for aliases in alias_map(keywords).values():
         subj_norms |= {_norm(a) for a in aliases}
 
-    materials = aggregate(pairs, today=today, lifecycle=lifecycle)
+    materials = aggregate(pairs)
     materials = [m for m in materials if _norm(m.name) not in subj_norms]
 
     # 把榜单歌曲的信息补到已有素材卡上；未被抖音用到的圈内新歌单独建卡
@@ -683,6 +698,10 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
         p["first_seen_days"] = lifecycle.age_days(canon or word, today)
         lifecycle.observe(word, "phrase", today)
         seen_words.append(canon or word)
+        # 新登记的碎片继承代表词的首见日期，让同一句的不同切法共享年龄
+        # 注意：必须在循环内部，否则只有最后一条 phrase 会执行继承
+        if rec and canon and canon != word and lifecycle.data.get(word, {}).get("first_seen") == today:
+            lifecycle.data[word]["first_seen"] = rec.get("first_seen", today)
 
     # 归一后去重：同一句的不同切法只保留被用得最多的一条，
     # 否则「上上上上上升期」和「上上上上上上升期」会各占一行。
@@ -707,9 +726,6 @@ def cmd_run(prod: bool, origin: str = "test") -> int:
                 if p not in deduped:
                     deduped.append(p)
             phrases = deduped
-        # 新登记的碎片继承代表词的首见日期，让同一句的不同切法共享年龄
-        if rec and canon and canon != word and lifecycle.data.get(word, {}).get("first_seen") == today:
-            lifecycle.data[word]["first_seen"] = rec.get("first_seen", today)
     if phrases:
         # 上面的 lifecycle.save() 早于这里执行，不补一次的话短语登记会丢
         lifecycle.save()

@@ -295,11 +295,14 @@ def main() -> int:
             if name in profile:
                 continue
             subjects.append(name)
+            # 归一化为团体 / 个人，保持与 keywords.json 与 plan_queries.py 契约一致
+            sub_type = "团体" if etype in {"男团", "女团", "乐队"} else "个人"
             profile[name] = {
                 "tier": tier,
                 "weight": WEIGHT[tier],
                 "region": region,
-                "type": etype,
+                "type": sub_type,
+                "sub_type": etype,
                 "org": org,
             }
 

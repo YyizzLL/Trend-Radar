@@ -19,7 +19,6 @@ import html
 from typing import Any
 
 from ..report.evidence import count_phrase
-from ..report.textmerge import related
 from .digest import Digest
 
 # 配色：浅色底 + 深色字，避免深色模式反转后对比度不足
@@ -193,8 +192,7 @@ def _text_block(entries: list[dict[str, Any]], hot_copy: list[str] | None = None
         parts.append(_label(f"采集（{len(entries)} 条）"))
     for i, e in enumerate(entries, 1):
         videos = int(e.get("videos") or 0)
-        size = int(e.get("size") or 0)
-        nums = f"在用 {videos} 条" + (f"（整句 {size}）" if size else "")
+        nums = f"在用 {videos} 条"
         nums += f" ｜ 最高 {int(e.get('likes_max') or 0):,} 赞"
         hits = e.get("circle_hits")
         if isinstance(hits, int):
@@ -209,14 +207,6 @@ def _text_block(entries: list[dict[str, Any]], hot_copy: list[str] | None = None
                 f'<div style="font-size:11px;color:{MUTED};padding-top:3px">'
                 f'配套 {_e(e["bgm"])}</div>'
             )
-        links = " &nbsp;".join(
-            _link(m["url"], f"看{j}")
-            for j, m in enumerate((e.get("members") or [])[:3], 1)
-            if isinstance(m, dict) and m.get("url")
-        )
-        if links:
-            extra += f'<div style="padding-top:6px">{links}</div>'
-
         parts.append(
             f'<div style="padding:12px 0;border-bottom:1px solid {LINE}">'
             f'<div style="font-size:15px;font-weight:700;line-height:1.5;color:{TEXT}">'
@@ -285,7 +275,7 @@ def _summary(d: Digest) -> str:
         ("圈内素材", c["circle"], ACCENT),
         ("跨圈模板", c["cross"], ACCENT2),
         ("今日新歌", c["chart_news"], TEXT),
-        ("今日文案", len(d.text_entries), TEXT),
+        ("今日文案", d.counts.get("text", len(d.text_entries)), TEXT),
     ]
     tds = "".join(
         f'<td class="cell" width="25%" align="center" style="padding:12px 4px">'
@@ -315,7 +305,7 @@ def _sources_line(d: Digest) -> str:
             f'{int(s.get("count") or 0)}</span>'
         )
     return (
-        f'<div style="padding-top:10px;line-height:1.9">' + " &nbsp; ".join(parts) + "</div>"
+        '<div style="padding-top:10px;line-height:1.9">' + " &nbsp; ".join(parts) + "</div>"
     )
 
 
@@ -349,14 +339,8 @@ def render_html(d: Digest, *, limits: dict[str, int] | None = None) -> str:
 
 def _render(d: Digest) -> str:
     hb = d.hotboard or {}
-    hot_copy = [x for x in (hb.get("文案") or []) if x]
+    hot_copy = d.hot_copy
     hot_play = [x for x in (hb.get("玩法") or []) if x]
-    # 已在采集结果里出现的热榜句不重复：采集版带「在用」证据，信息更多
-    if d.text_entries and hot_copy:
-        hot_copy = [
-            t for t in hot_copy
-            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
-        ]
 
     body = "".join(
         [
@@ -491,13 +475,8 @@ def render_text(d: Digest) -> str:
     lines.append("")
 
     hb = d.hotboard or {}
-    hot_copy = [x for x in (hb.get("文案") or []) if x]
+    hot_copy = d.hot_copy
     hot_play = [x for x in (hb.get("玩法") or []) if x]
-    if d.text_entries and hot_copy:
-        hot_copy = [
-            t for t in hot_copy
-            if not any(related(t, str(e.get("text") or "")) for e in d.text_entries)
-        ]
 
     if d.text_entries or hot_copy:
         lines.append(f"== 今日文案（{len(d.text_entries) + len(hot_copy)}）==")
@@ -505,8 +484,6 @@ def render_text(d: Digest) -> str:
             lines.append("[采集]")
             for i, e in enumerate(d.text_entries, 1):
                 nums = f"{int(e.get('videos') or 0)} 条"
-                if e.get("size"):
-                    nums += f"（整句 {int(e['size'])}）"
                 hits = e.get("circle_hits")
                 src_note = ""
                 if isinstance(hits, int):

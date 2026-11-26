@@ -37,10 +37,9 @@ except ImportError:  # 按模块方式运行时的回退
     from scripts.probe._env import strip_proxy_for_localhost
 
 strip_proxy_for_localhost()
-  # noqa: E402
 
-from scripts.collect_douyin import Searcher, run_query  # noqa: E402
-from scripts.daily_run import ensure_edge  # noqa: E402
+from scripts.collect_douyin import Searcher, run_query
+from scripts.daily_run import ensure_edge
 
 DEFAULT = ["瞬移滑镜慢动作挑战", "霸王龙舞步转场挑战"]
 
